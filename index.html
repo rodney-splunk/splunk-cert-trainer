@@ -373,7 +373,7 @@ function examInfo(){
     <div class="glass mode rec" data-m="practice"><div class="mi">📝</div><div><b>Practice<span class="rectag">Start here</span></b><p>All ${QUESTIONS.length} questions, instant feedback + docs.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="exam"><div class="mi">⏱️</div><div><b>Timed Exam</b><p>${e.minutes}-min countdown, feedback at the end.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="challenge"><div class="mi">⚡</div><div><b>Challenge Round</b><p>The ${QUESTIONS.filter(q=>q.hard).length} hardest questions.</p></div><div class="arr">›</div></div>
-    <div class="glass mode" data-m="flash"><div class="mi">🃏</div><div><b>Flashcards</b><p>Flip through the ${QUESTIONS.length} exam questions.</p></div><div class="arr">›</div></div>
+    <div class="glass mode" data-m="commands"><div class="mi">⚔️</div><div><b>Command Face-Off</b><p>${COMMANDS.length} key commands &amp; functions vs their look-alikes.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="review"><div class="mi">📖</div><div><b>Rapid Review</b><p>${REVIEW.length} quick facts, grouped by topic.</p></div><div class="arr">›</div></div>
     <div class="glass mode ${hasMissed?'':'dis'}" data-m="missed"><div class="mi">🔁</div><div><b>Review Missed</b><p>${hasMissed?`Re-quiz the ${store.missedIds.length} you've missed.`:'Take a quiz first to unlock.'}</p></div>${hasMissed?'<div class="arr">›</div>':''}</div>`;
   const v=$(`<div class="view">${topBar()}
@@ -406,7 +406,7 @@ function examInfo(){
   const shuf=()=>v.querySelector('#shuf').checked;
   v.querySelectorAll('.mode').forEach(m=>{if(m.classList.contains('dis'))return;m.onclick=()=>{
     const mode=m.dataset.m;
-    if(mode==='flash'){startDeck(questionDeck(),shuf(),'Flashcards',examInfo);return;}
+    if(mode==='commands'){startDeck(commandDeck(),false,'Command Face-Off',examInfo);return;}
     if(mode==='review'){reviewPicker();return;}
     if(mode==='challenge'){startQuiz('challenge',QUESTIONS.filter(q=>q.hard).map(q=>q.id),shuf());return;}
     if(mode==='missed'){startQuiz('missed',store.missedIds.filter(id=>QUESTIONS[id]),shuf());return;}
@@ -559,7 +559,7 @@ function confetti(){const cols=['#ff6a2b','#ffab3d','#33d17a','#6ab8ff','#a45cf5
     d.style.animationDuration=(2.4+Math.random()*1.8)+'s';d.style.animationDelay=Math.random()*.5+'s';d.style.transform='rotate('+Math.random()*360+'deg)';document.body.appendChild(d);setTimeout(()=>d.remove(),4600);}}
 
 /* ============ FLASHCARDS / DECKS ============ */
-function questionDeck(){ return QUESTIONS.map(q=>({tag:CATEGORIES[q.cat].name, front:q.q, back:q.a.map(i=>q.o[i]).join(' · '), extra:q.e, doc:q.d})); }
+function commandDeck(){ return COMMANDS.map(c=>({tag:c.cat, front:`<div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.5rem;font-weight:700;color:var(--accent);margin-bottom:10px">${c.name}</div><div style="margin-bottom:14px;line-height:1.45">${c.use}</div><div style="background:rgba(127,127,127,.12);border:1px solid var(--hair);border-radius:10px;padding:11px 13px;font-family:ui-monospace,Menlo,monospace;font-size:.82rem;line-height:1.5;overflow-x:auto">${c.ex}</div>`, backtag:`vs ${c.vs}`, back:c.diff, doc:c.d})); }
 function startDeck(cards, shuffle, title, backFn){
   clearTimer(); markStudiedToday();
   S.deck=cards; S.deckTitle=title||'Flashcards'; S.deckBack=backFn||examInfo;
@@ -578,7 +578,7 @@ function flash(){
       <div class="chip">✓ ${S.fknown} known</div></div>
     <div class="fcstage"><div class="fcard" id="fc">
       <div class="fface front"><div class="tag">${c.tag}</div><div class="ft">${c.front}</div></div>
-      <div class="fface back"><div class="tag">Answer</div><div class="ft">${c.back}</div>${c.extra?`<p style="color:var(--muted);font-size:.86rem;margin-top:12px">${c.extra}</p>`:''}${c.doc?`<div class="doclink">📖 <a href="${c.doc}" target="_blank" rel="noopener">Docs →</a></div>`:''}</div>
+      <div class="fface back"><div class="tag">${c.backtag||'Answer'}</div><div class="ft">${c.back}</div>${c.extra?`<p style="color:var(--muted);font-size:.86rem;margin-top:12px">${c.extra}</p>`:''}${c.doc?`<div class="doclink">📖 <a href="${c.doc}" target="_blank" rel="noopener">Docs →</a></div>`:''}</div>
     </div></div>
     <div class="fhint">Tap the card or press Space to flip</div>
     <div class="qnav" style="margin-top:8px"><button id="know">✓ Got it</button><button id="again" class="ghost">Review again</button><button id="exit" class="ghost">Exit</button></div></div>`);
