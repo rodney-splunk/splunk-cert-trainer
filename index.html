@@ -263,7 +263,7 @@ const byCat = {}; CAT_ORDER.forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).m
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -330,6 +330,7 @@ function dashboard(){
       <div class="dstat"><b>${store.attempts}</b><span>Exams</span></div>
       <div class="dstat"><b>${store.bestScore}%</b><span>Best</span></div>
       <div class="dstat"><b>${store.passes}</b><span>Passes</span></div>
+      <div class="dstat"><b>${store.seenIds.length}/${QUESTIONS.length}</b><span>Answered</span></div>
       <div class="dstat"><b>🔥 ${store.dailyStreak}</b><span>Day streak</span></div>
     </div>
     ${strong?`<div class="swrow">
@@ -390,7 +391,7 @@ function examInfo(){
     <div class="section-title">👉 Tap a mode to start</div>
     <div class="modes">${modes}</div>
     <div class="lenrow"><span class="lenlabel">Questions <span style="color:var(--muted);font-weight:500;font-size:.8rem">· Practice &amp; Timed Exam</span></span>
-      <div class="segmented" id="qcount">${[['10',10],['20',20],['30',30],['50',50],['All',0]].map(x=>`<button class="seg ${S.qCount===x[1]?'on':''}" data-n="${x[1]}">${x[0]}</button>`).join('')}</div></div>
+      <div class="segmented" id="qcount">${[['10',10],['20',20],['30',30],['50',50],['65',65],['All',0]].map(x=>`<button class="seg ${S.qCount===x[1]?'on':''}" data-n="${x[1]}">${x[0]}</button>`).join('')}</div></div>
     <div class="toggle"><input type="checkbox" id="shuf" checked> <label for="shuf">Shuffle question order</label></div>
     <div class="section-title">Or drill a single category</div>
     <div class="glass" style="padding:8px"><select id="drillsel" style="width:100%;padding:14px;border-radius:14px;background:transparent;color:var(--text);border:0;font:inherit;font-weight:600">
@@ -448,7 +449,7 @@ function question(){
   const opts=Q.o.map((o,i)=>`<label class="opt ${exam&&prevPick.includes(i)?'picked':''}" data-i="${i}">
     <input type="${multi?'checkbox':'radio'}" name="o" value="${i}" ${prevPick.includes(i)?'checked':''}><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
   const v=$(`<div class="view"><button class="back" id="qexit">← Exit</button>${bar}<div class="glass qcard">
-    <div class="qcat">${CATEGORIES[Q.cat].name}${Q.hard?`<span class="chall">⚡ Challenge</span>`:''}${S.mode==='drill'?' · drill':S.mode==='missed'?' · review':''}</div>
+    <div class="qcat">${CATEGORIES[Q.cat].name}${Q.hard?`<span class="chall">⚡ Challenge</span>`:''}${S.mode==='drill'?' · drill':S.mode==='missed'?' · review':''}${store.seenIds.includes(Q.id)?`<span style="margin-left:8px;font-size:.7rem;color:var(--muted);font-weight:600">✓ Seen</span>`:''}</div>
     <p class="qtext">${Q.q}</p>${multi?`<p class="multi">✔ Select all that apply</p>`:``}
     <div class="opts" id="opts">${opts}</div><div id="ex"></div>
     <div class="qnav">
@@ -475,6 +476,7 @@ function question(){
 }
 function recordExam(v,Q){const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);S.answers[Q.id]=picked;}
 function tally(Q,picked){
+  if(!store.seenIds.includes(Q.id))store.seenIds.push(Q.id);
   const pc=S.perCat[Q.cat]||(S.perCat[Q.cat]={c:0,t:0});pc.t++;
   const ok=picked.length&&eq(picked,Q.a);
   const m=store.catMastery[Q.cat]||(store.catMastery[Q.cat]={c:0,t:0});m.t++;
@@ -487,7 +489,7 @@ function gradeNow(v,Q){
   const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);
   if(!picked.length)return;
   S.answered=true;
-  const ok=eq(picked,Q.a);const g=tally(Q,picked);beep(ok);
+  const ok=eq(picked,Q.a);const g=tally(Q,picked);beep(ok);saveStore();
   v.querySelectorAll('#opts .opt').forEach(o=>{const i=+o.dataset.i;o.classList.add('disabled');o.querySelector('input').disabled=true;
     if(Q.a.includes(i))o.classList.add('correct');else if(picked.includes(i))o.classList.add('wrong');else o.classList.add('dim');});
   v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v ${ok?'ok':'no'}">${ok?'✓ Correct':'✕ Incorrect'}${ok&&g?`<span class="plusxp">+${g} XP</span>`:''}</div>${Q.e}<div class="doclink">📖 <a href="${Q.d}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div>`;
