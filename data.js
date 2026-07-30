@@ -523,12 +523,12 @@ const EXAMS = [
 ];
 
 // ---- Rapid Review flashcards (community Quizlet set, verified + corrected) ----
-const REVIEW_CATS = ['arch','searchfun','viz','eval','filter','correlate','fields','aliases','tags','macros','cim'];
+const REVIEW_CATS = ['arch','searchfun','viz','eval','filter','correlate','fields','aliases','tags','macros','cim','clauses'];
 const REVIEW_CATNAME = {
   arch:'Buckets & Architecture', searchfun:'Search Fundamentals', viz:'Visualizations & Charts',
   eval:'eval & Formatting', filter:'Filtering Results', correlate:'Correlating Events',
   fields:'Fields & Extractions', aliases:'Aliases & Calculated Fields', tags:'Tags & Event Types',
-  macros:'Macros', cim:'CIM'
+  macros:'Macros', cim:'CIM', clauses:'Clauses, Options & Functions'
 };
 const REVIEW = [
   {c:'arch', q:`What is the only writeable bucket type?`, a:`The hot bucket.`},
@@ -641,6 +641,21 @@ const REVIEW = [
   {c:'macros', q:`What is the syntax for using a macro in a search?`, a:`Wrap the macro name in backticks:  &#96;macro&#96;`},
 
   {c:'cim', q:`What is the Splunk Common Information Model (CIM)?`, a:`A methodology for normalizing data so you can easily correlate data from different sources and sourcetypes.`},
+
+  {c:'clauses', q:`Which command uses the OVER clause, and what does it set?`, a:`Only chart. OVER sets the x-axis (the field whose values run along the bottom).`},
+  {c:'clauses', q:`In stats, what does the BY clause do?`, a:`Groups results into rows - one row per unique value (or combination) of the BY field(s). stats has no OVER clause.`},
+  {c:'clauses', q:`In chart, what is the difference between OVER and BY?`, a:`OVER sets the x-axis; BY splits the results into separate columns/series. Example: chart count OVER host BY status.`},
+  {c:'clauses', q:`In timechart, why is there no OVER clause?`, a:`The x-axis is always _time (implicit OVER _time). You only add BY to split into series - and only ONE field.`},
+  {c:'clauses', q:`How many split fields can timechart use vs chart?`, a:`timechart: one BY field only. chart: OVER one field plus BY one field.`},
+  {c:'clauses', q:`What does the limit option do on chart's BY clause (e.g. limit=0)?`, a:`It caps how many distinct series (columns) are shown. limit=0 means show ALL series with no cap.`},
+  {c:'clauses', q:`What does span do in timechart (and bin/bucket)?`, a:`Sets the size of each time bucket, e.g. span=1h groups events into one-hour intervals.`},
+  {c:'clauses', q:`What does maxspan control in the transaction command?`, a:`The maximum total time allowed between the earliest and latest events in a single transaction.`},
+  {c:'clauses', q:`What does maxpause control in the transaction command?`, a:`The maximum time allowed BETWEEN consecutive events; a gap longer than maxpause ends the transaction.`},
+  {c:'clauses', q:`What do startswith and endswith do in transaction?`, a:`Define the event that begins (startswith) and the event that ends (endswith) each transaction group.`},
+  {c:'clauses', q:`What does sum() do and which commands accept it?`, a:`Returns the sum of a field's values. Works with stats, chart, and timechart.`},
+  {c:'clauses', q:`Difference between count and count(field)?`, a:`count counts all events; count(field) counts only events that have a value for that field.`},
+  {c:'clauses', q:`values() vs list() as stats functions?`, a:`values() returns unique values, sorted. list() returns all values in the order seen (up to 100), including duplicates.`},
+  {c:'clauses', q:`dc() vs count()?`, a:`dc() = distinct count (number of unique values). count() = total number of events/occurrences.`},
 ];
 
 /* Command Face-Off deck: a common command/function, a real example, and the command it is most often confused with. */
