@@ -586,7 +586,7 @@ const EXAMS = [
     about:'The benchmark intermediate cert and the prerequisite for every exam above it. Focuses on building and managing knowledge objects, advanced SPL, data models, and the Common Information Model.',
     facts:['65 questions · 60 minutes','Delivered by Pearson VUE (test center or online-proctored)','No formal prerequisite to sit the exam','$130 USD per attempt'] },
   { id:'admin', code:'SPLK-1003', name:'Splunk Enterprise Certified Admin', level:'Professional',
-    status:'soon', minutes:60, realQ:56, icon:'🛠️', color:'#2ec16b', due:'Month 2', dueNote:'prereq: Power User',
+    status:'ready', minutes:60, realQ:56, icon:'🛠️', color:'#2ec16b', due:'Month 2', dueNote:'prereq: Power User',
     url:'https://www.splunk.com/en_us/training/certification-track/splunk-enterprise-certified-admin.html',
     tagline:'License mgmt, indexers & search heads, data ingestion, platform admin.',
     about:'Your next cert. Validates day-to-day administration, configuration, monitoring, and data management of a Splunk Enterprise environment.',
