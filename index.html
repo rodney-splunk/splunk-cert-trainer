@@ -261,13 +261,13 @@
 QUESTIONS.push(...ADMIN_QUESTIONS);
 QUESTIONS.forEach((q,i)=>q.id=i);
 const byCat = {}; [...CAT_ORDER, ...ADMIN_CAT_ORDER].forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).map(q=>q.id));
-const curBank=()=>(S.exam&&S.exam.id==='admin')?'admin':'power';
+const curBank=()=>(S.exam&&QUESTIONS.some(q=>q.exam===S.exam.id))?S.exam.id:'power';
 const curQ=()=>QUESTIONS.filter(q=>q.exam===curBank());
 const curOrder=()=>curBank()==='admin'?ADMIN_CAT_ORDER:CAT_ORDER;
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power'};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -345,7 +345,10 @@ function dashboard(){
 }
 function menu(){
   currentRender=menu;
-  const ready=EXAMS.find(e=>e.status==='ready');
+  const readyExams=EXAMS.filter(e=>e.status==='ready');
+  const ready=readyExams[0];
+  const examBank=e=>QUESTIONS.some(q=>q.exam===e.id)?e.id:'power';
+  const qExam=readyExams.find(e=>e.id===store.quickExam)||ready;
   const cards=EXAMS.map(e=>`<div class="glass exam ${e.status==='ready'?'ready':'locked'}" data-id="${e.id}">
     <span class="badge ${e.status==='ready'?'ready':'soon'}">${e.status==='ready'?'Ready':'Coming soon'}</span>
     <div class="ico" style="background:linear-gradient(180deg,${e.color},${e.color}bb)">${e.icon}</div>
@@ -354,13 +357,15 @@ function menu(){
     ${e.status==='ready'?`<div class="go">▶ Start studying</div>`:(e.url?`<a class="official" href="${e.url}" target="_blank" rel="noopener">Official exam page ↗</a>`:`<div class="soonhint">Coming soon</div>`)}</div>`).join('');
   const v=$(`<div class="view">${topBar()}
     <div class="brand"><div class="logo">🔍</div><h1>Splunk Certification Trainer</h1><p>Your onboarding cert path</p></div>
-    ${ready?`<button class="hero-cta" id="quickstart"><span>▶ Start ${ready.name}</span><small>${QUESTIONS.filter(q=>q.exam==='power').length} questions · choose a mode next</small></button>`:''}
+    ${readyExams.length>1?`<div class="segmented" id="qtoggle" style="max-width:360px;margin:0 auto 12px">${readyExams.map(e=>`<button class="seg ${e.id===qExam.id?'on':''}" data-id="${e.id}">${e.code||e.name}</button>`).join('')}</div>`:''}
+    ${qExam?`<button class="hero-cta" id="quickstart"><span>▶ Start ${qExam.name}</span><small>${QUESTIONS.filter(q=>q.exam===examBank(qExam)).length} questions · choose a mode next</small></button>`:''}
     ${dashboard()}
     <div class="section-title" style="text-align:center">Choose an exam</div>
     <div class="grid">${cards}</div>
     <div class="path">Your certification journey: <b style="color:var(--text)">Core Power User</b> → Enterprise Admin → Cloud Admin → Enterprise Architect</div></div>`);
   wireTop(v);
-  const qs=v.querySelector('#quickstart'); if(qs)qs.onclick=()=>{S.exam=ready;examInfo();};
+  const qs=v.querySelector('#quickstart'); if(qs)qs.onclick=()=>{S.exam=qExam;examInfo();};
+  v.querySelectorAll('#qtoggle .seg').forEach(s=>s.onclick=()=>{store.quickExam=s.dataset.id;saveStore();menu();});
   v.querySelectorAll('.exam').forEach(c=>{if(!c.classList.contains('locked'))c.onclick=()=>{S.exam=EXAMS.find(e=>e.id===c.dataset.id);examInfo();};});
   show(v);
   requestAnimationFrame(()=>{const b=v.querySelector('.xpbar>i');if(b)b.style.width=b.dataset.w+'%';});
