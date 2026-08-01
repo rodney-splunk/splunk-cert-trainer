@@ -258,8 +258,12 @@
 <script src="data.js"></script>
 <script>
 /* ============ data prep ============ */
+QUESTIONS.push(...ADMIN_QUESTIONS);
 QUESTIONS.forEach((q,i)=>q.id=i);
-const byCat = {}; CAT_ORDER.forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).map(q=>q.id));
+const byCat = {}; [...CAT_ORDER, ...ADMIN_CAT_ORDER].forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).map(q=>q.id));
+const curBank=()=>(S.exam&&S.exam.id==='admin')?'admin':'power';
+const curQ=()=>QUESTIONS.filter(q=>q.exam===curBank());
+const curOrder=()=>curBank()==='admin'?ADMIN_CAT_ORDER:CAT_ORDER;
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
@@ -316,7 +320,7 @@ function rerenderTop(){currentRender();}
 function dashboard(){
   const li=levelInfo(store.xpTotal);
   // strongest/weakest category by mastery (min 1 attempt)
-  const cats=CAT_ORDER.map(k=>{const m=store.catMastery[k];return m&&m.t?{k,acc:m.c/m.t,t:m.t}:null}).filter(Boolean);
+  const cats=[...CAT_ORDER,...ADMIN_CAT_ORDER].map(k=>{const m=store.catMastery[k];return m&&m.t?{k,acc:m.c/m.t,t:m.t}:null}).filter(Boolean);
   let strong=null,weak=null;
   if(cats.length){const s=[...cats].sort((a,b)=>b.acc-a.acc);strong=s[0];weak=s[s.length-1];}
   const badgeHTML=BADGES.map(b=>`<div class="bdg ${store.badges.includes(b.id)?'':'locked'}" title="${b.name}: ${b.desc}">${b.icon}</div>`).join('');
@@ -350,7 +354,7 @@ function menu(){
     ${e.status==='ready'?`<div class="go">▶ Start studying</div>`:(e.url?`<a class="official" href="${e.url}" target="_blank" rel="noopener">Official exam page ↗</a>`:`<div class="soonhint">Coming soon</div>`)}</div>`).join('');
   const v=$(`<div class="view">${topBar()}
     <div class="brand"><div class="logo">🔍</div><h1>Splunk Certification Trainer</h1><p>Your onboarding cert path</p></div>
-    ${ready?`<button class="hero-cta" id="quickstart"><span>▶ Start ${ready.name}</span><small>${QUESTIONS.length} questions · choose a mode next</small></button>`:''}
+    ${ready?`<button class="hero-cta" id="quickstart"><span>▶ Start ${ready.name}</span><small>${QUESTIONS.filter(q=>q.exam==='power').length} questions · choose a mode next</small></button>`:''}
     ${dashboard()}
     <div class="section-title" style="text-align:center">Choose an exam</div>
     <div class="grid">${cards}</div>
@@ -366,24 +370,25 @@ function menu(){
 function examInfo(){
   currentRender=examInfo;
   const e=S.exam;
-  const hasMissed=store.missedIds.length>0;
+  const bank=curBank(), aq=curQ(), ord=curOrder();
+  const hasMissed=store.missedIds.some(id=>QUESTIONS[id]&&QUESTIONS[id].exam===bank);
   const catCard=k=>{const c=CATEGORIES[k];return `<div class="glass cat"><div class="w">${c.weight}%</div><div class="body"><b>${c.name}</b><p>${c.blurb}</p></div><a href="${c.doc}" target="_blank" rel="noopener">Docs →</a></div>`;};
-  const cats3=CAT_ORDER.slice(0,3).map(catCard).join('');
-  const catsRest=CAT_ORDER.slice(3).map(catCard).join('');
+  const cats3=ord.slice(0,3).map(catCard).join('');
+  const catsRest=ord.slice(3).map(catCard).join('');
   const modes=`
-    <div class="glass mode rec" data-m="practice"><div class="mi">📝</div><div><b>Practice<span class="rectag">Start here</span></b><p>All ${QUESTIONS.length} questions, instant feedback + docs.</p></div><div class="arr">›</div></div>
+    <div class="glass mode rec" data-m="practice"><div class="mi">📝</div><div><b>Practice<span class="rectag">Start here</span></b><p>All ${aq.length} questions, instant feedback + docs.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="exam"><div class="mi">⏱️</div><div><b>Timed Exam</b><p>${e.minutes}-min countdown, feedback at the end.</p></div><div class="arr">›</div></div>
-    <div class="glass mode" data-m="challenge"><div class="mi">⚡</div><div><b>Challenge Round</b><p>The ${QUESTIONS.filter(q=>q.hard).length} hardest questions.</p></div><div class="arr">›</div></div>
-    <div class="glass mode" data-m="commands"><div class="mi">⚔️</div><div><b>Command Face-Off</b><p>Quiz yourself on ${COMMANDS.length} commands &amp; their look-alikes.</p></div><div class="arr">›</div></div>
-    <div class="glass mode" data-m="review"><div class="mi">📖</div><div><b>Rapid Review</b><p>${REVIEW.length} quick facts, grouped by topic.</p></div><div class="arr">›</div></div>
-    <div class="glass mode ${hasMissed?'':'dis'}" data-m="missed"><div class="mi">🔁</div><div><b>Review Missed</b><p>${hasMissed?`Re-quiz the ${store.missedIds.length} you've missed.`:'Take a quiz first to unlock.'}</p></div>${hasMissed?'<div class="arr">›</div>':''}</div>`;
+    ${aq.filter(q=>q.hard).length?`<div class="glass mode" data-m="challenge"><div class="mi">⚡</div><div><b>Challenge Round</b><p>The ${aq.filter(q=>q.hard).length} hardest questions.</p></div><div class="arr">›</div></div>`:''}
+    ${bank==='power'?`<div class="glass mode" data-m="commands"><div class="mi">⚔️</div><div><b>Command Face-Off</b><p>Quiz yourself on ${COMMANDS.length} commands &amp; their look-alikes.</p></div><div class="arr">›</div></div>`:''}
+    ${bank==='power'?`<div class="glass mode" data-m="review"><div class="mi">📖</div><div><b>Rapid Review</b><p>${REVIEW.length} quick facts, grouped by topic.</p></div><div class="arr">›</div></div>`:''}
+    <div class="glass mode ${hasMissed?'':'dis'}" data-m="missed"><div class="mi">🔁</div><div><b>Review Missed</b><p>${hasMissed?`Re-quiz the ones you've missed.`:'Take a quiz first to unlock.'}</p></div>${hasMissed?'<div class="arr">›</div>':''}</div>`;
   const v=$(`<div class="view">${topBar()}
     <button class="back">← All exams</button>
     <div class="glass hero"><div class="ico" style="background:linear-gradient(180deg,${e.color},${e.color}bb)">${e.icon}</div>
       <div class="code">${e.code?e.code+' · ':''}${e.level}</div><h2>${e.name}</h2>
       ${e.due?`<div class="duebadge">🗓 Target: ${e.due}${e.dueNote?` · ${e.dueNote}`:''}</div>`:''}
       <p>${e.about}</p>
-      <div class="stats"><div class="stat"><b>${QUESTIONS.length}</b><span>Practice Qs</span></div>
+      <div class="stats"><div class="stat"><b>${aq.length}</b><span>Practice Qs</span></div>
         <div class="stat"><b>${e.realQ||'-'}</b><span>Real exam Qs</span></div>
         <div class="stat"><b>${e.minutes}<small style="font-size:.9rem"> min</small></b><span>Real exam</span></div></div>
       <div class="facts">${e.facts.map(f=>`<div class="fact">✓ ${f}</div>`).join('')}</div>
@@ -396,7 +401,7 @@ function examInfo(){
     <div class="section-title">Or drill a single category</div>
     <div class="glass" style="padding:8px"><select id="drillsel" style="width:100%;padding:14px;border-radius:14px;background:transparent;color:var(--text);border:0;font:inherit;font-weight:600">
       <option value="">Pick a category to drill…</option>
-      ${CAT_ORDER.map(k=>`<option value="${k}">${CATEGORIES[k].name} (${byCat[k].length} Q)</option>`).join('')}
+      ${ord.map(k=>`<option value="${k}">${CATEGORIES[k].name} (${byCat[k].length} Q)</option>`).join('')}
     </select></div>
     <div class="section-title">Exam blueprint · 10 categories</div>
     ${cats3}
@@ -409,9 +414,9 @@ function examInfo(){
     const mode=m.dataset.m;
     if(mode==='commands'){startCommandQuiz();return;}
     if(mode==='review'){reviewPicker();return;}
-    if(mode==='challenge'){startQuiz('challenge',QUESTIONS.filter(q=>q.hard).map(q=>q.id),shuf());return;}
-    if(mode==='missed'){startQuiz('missed',store.missedIds.filter(id=>QUESTIONS[id]),shuf());return;}
-    let ids=QUESTIONS.map(q=>q.id); if(shuf())ids=shuffled(ids); if(S.qCount>0)ids=ids.slice(0,S.qCount);
+    if(mode==='challenge'){startQuiz('challenge',aq.filter(q=>q.hard).map(q=>q.id),shuf());return;}
+    if(mode==='missed'){startQuiz('missed',store.missedIds.filter(id=>QUESTIONS[id]&&QUESTIONS[id].exam===bank),shuf());return;}
+    let ids=aq.map(q=>q.id); if(shuf())ids=shuffled(ids); if(S.qCount>0)ids=ids.slice(0,S.qCount);
     startQuiz(mode, ids, false);
   };});
   v.querySelectorAll('#qcount .seg').forEach(s=>s.onclick=()=>{S.qCount=+s.dataset.n; v.querySelectorAll('#qcount .seg').forEach(x=>x.classList.toggle('on',x===s));});
@@ -520,7 +525,7 @@ function finish(){
 function results(pct,pass,total,earned){
   currentRender=()=>results(pct,pass,total,[]);
   const r=52,c=2*Math.PI*r;
-  const cats=CAT_ORDER.filter(k=>S.perCat[k]).map(k=>{const p=S.perCat[k],acc=Math.round(p.c/p.t*100);const col=acc>=75?'var(--green)':acc>=50?'var(--amber)':'var(--red)';return{k,acc,p,col};});
+  const cats=[...CAT_ORDER,...ADMIN_CAT_ORDER].filter(k=>S.perCat[k]).map(k=>{const p=S.perCat[k],acc=Math.round(p.c/p.t*100);const col=acc>=75?'var(--green)':acc>=50?'var(--amber)':'var(--red)';return{k,acc,p,col};});
   const bars=cats.map(x=>`<div class="catrow"><div class="cn">${CATEGORIES[x.k].name}<span>${x.p.c}/${x.p.t} correct</span></div>
     <div class="track"><i data-w="${x.acc}" style="background:${x.col}"></i></div><div class="pct" style="color:${x.col}">${x.acc}%</div></div>`).join('');
   const weak=cats.filter(x=>x.acc<75).sort((a,b)=>a.acc-b.acc);
@@ -544,7 +549,7 @@ function results(pct,pass,total,earned){
     ${review}
     <div class="qnav" style="margin-top:20px"><button id="retake">Retake</button><button id="info" class="ghost">Exam menu</button><button id="home" class="ghost">← All exams</button></div></div>`);
   wireTop(v);
-  v.querySelector('#retake').onclick=()=>startQuiz(S.mode, S.mode==='missed'?store.missedIds.filter(id=>QUESTIONS[id]):S.order.slice(), true);
+  v.querySelector('#retake').onclick=()=>startQuiz(S.mode, S.mode==='missed'?store.missedIds.filter(id=>QUESTIONS[id]&&QUESTIONS[id].exam===curBank()):S.order.slice(), true);
   v.querySelector('#info').onclick=examInfo;
   v.querySelector('#home').onclick=menu;
   v.querySelectorAll('.drill').forEach(b=>b.onclick=()=>startQuiz('drill',byCat[b.dataset.k].slice(),true));

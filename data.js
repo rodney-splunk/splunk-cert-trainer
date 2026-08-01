@@ -496,6 +496,7 @@ const CAT_RANGES = [
 ];
 const EXTRA_CATS = {66:'filter',67:'filter',68:'filter',69:'filter',70:'viz',71:'filter',72:'fields',73:'filter'};
 QUESTIONS.forEach((q,i)=>{
+  q.exam = 'power';
   if(q.cat) return; // explicit category (e.g. challenge questions) wins
   if(EXTRA_CATS[i]!==undefined){ q.cat = EXTRA_CATS[i]; return; }
   const n=i+1; const r=CAT_RANGES.find(x=>n<=x[1]); q.cat = r?r[0]:'filter';
@@ -526,6 +527,55 @@ const CATEGORIES = {
 
 // order for displaying the blueprint
 const CAT_ORDER = ['viz','filter','correlate','fields','aliases','tags','macros','workflow','datamodels','cim'];
+
+/* ===================== SPLK-1003 Admin exam ===================== */
+const AD_DEPLOY="https://docs.splunk.com/Documentation/Splunk/latest/Deploy/Datapipeline";
+const AD_LIC="https://docs.splunk.com/Documentation/Splunk/latest/Admin/HowSplunklicensingworks";
+const AD_CONF="https://docs.splunk.com/Documentation/Splunk/latest/Admin/Aboutconfigurationfiles";
+const AD_BTOOL="https://docs.splunk.com/Documentation/Splunk/latest/Troubleshooting/Usebtooltotroubleshootconfigurations";
+const AD_IDX="https://docs.splunk.com/Documentation/Splunk/latest/Indexer/HowSplunkstoresindexes";
+const AD_RETAIN="https://docs.splunk.com/Documentation/Splunk/latest/Indexer/Setaretirementandarchivingpolicy";
+const AD_USERS="https://docs.splunk.com/Documentation/Splunk/latest/Security/Aboutusersandroles";
+const AD_UF="https://docs.splunk.com/Documentation/Forwarder/latest/Forwarder/Abouttheuniversalforwarder";
+const AD_DEPSRV="https://docs.splunk.com/Documentation/Splunk/latest/Updating/Aboutdeploymentserver";
+const AD_MON="https://docs.splunk.com/Documentation/Splunk/latest/Data/Monitorfilesanddirectories";
+const AD_HEC="https://docs.splunk.com/Documentation/Splunk/latest/Data/UsetheHTTPEventCollector";
+const AD_SED="https://docs.splunk.com/Documentation/Splunk/latest/Data/Anonymizedata";
+const AD_DSRCH="https://docs.splunk.com/Documentation/Splunk/latest/DistSearch/Whatisdistributedsearch";
+const AD_GDI="https://docs.splunk.com/Documentation/Splunk/latest/Data/Aboutdefaultfields";
+
+Object.assign(CATEGORIES, {
+  deploy:    {name:'Deployment & Components', weight:5, doc:AD_DEPLOY, blurb:'Splunk components (indexer, search head, forwarder) and the data pipeline.'},
+  license:   {name:'License Management', weight:5, doc:AD_LIC, blurb:'License types, pools, license manager/peers, and violations.'},
+  confs:     {name:'Configuration Files', weight:10, doc:AD_CONF, blurb:'.conf files, layering & precedence (local over default), and btool.'},
+  indexes:   {name:'Indexes & Data Retention', weight:10, doc:AD_IDX, blurb:'Creating indexes, the bucket lifecycle (hot/warm/cold/frozen), and retention.'},
+  users:     {name:'Users, Roles & Authentication', weight:10, doc:AD_USERS, blurb:'Users, roles and capabilities, and authentication (LDAP, SAML, MFA).'},
+  gdi:       {name:'Getting Data In', weight:10, doc:AD_GDI, blurb:'Input options overview, default index, and index-time vs search-time.'},
+  forwarders:{name:'Forwarders & Deployment', weight:15, doc:AD_UF, blurb:'Universal vs heavy forwarder, forwarder management, and the deployment server.'},
+  inputs:    {name:'Data Inputs', weight:15, doc:AD_MON, blurb:'Monitor, network, scripted inputs, and the HTTP Event Collector (HEC).'},
+  parsing:   {name:'Parsing & Transforming Data', weight:10, doc:AD_DEPLOY, blurb:'The parsing phase, event breaking, timestamps, and SEDCMD.'},
+  dsearch:   {name:'Distributed Search', weight:10, doc:AD_DSRCH, blurb:'Search heads, search peers, search head clustering, and indexer clustering.'},
+});
+const ADMIN_CAT_ORDER = ['deploy','license','confs','indexes','users','gdi','forwarders','inputs','parsing','dsearch'];
+
+const ADMIN_QUESTIONS = [
+ {exam:'admin', cat:'deploy', q:"Which Splunk Enterprise component parses and indexes incoming data and stores it in indexes?", o:["Universal forwarder","Indexer","Search head","Deployment server"], a:[1], e:"The <b>indexer</b> parses, indexes, and stores incoming data, and searches its own indexed data. Forwarders send data in; search heads coordinate searches.", d:AD_DEPLOY},
+ {exam:'admin', cat:'deploy', q:"What is the correct order of the Splunk data pipeline?", o:["Input → Parsing → Indexing → Search","Parsing → Input → Search → Indexing","Input → Indexing → Parsing → Search","Search → Input → Parsing → Indexing"], a:[0], e:"Data flows <b>Input → Parsing → Indexing → Search</b>. Parsing (event breaking, timestamp extraction, metadata) happens before the data is written to disk during indexing.", d:AD_DEPLOY},
+ {exam:'admin', cat:'license', q:"What triggers a Splunk license violation?", o:["Running too many concurrent searches","Indexing more data in a day than your license permits","Creating too many indexes","Adding too many users"], a:[1], e:"A <b>license violation</b> occurs when you exceed your <b>licensed daily indexing volume</b> - Splunk measures the volume of data indexed per day against your license quota.", d:AD_LIC},
+ {exam:'admin', cat:'confs', q:"The same setting is defined in an app's <code>local</code> and <code>default</code> directories. Which value takes effect?", o:["default always wins","local overrides default","The most recently edited file","They are merged and averaged"], a:[1], e:"In configuration layering, <b>local overrides default</b>. Never edit files in <code>default</code> (upgrades overwrite them); put your changes in <code>local</code>.", d:AD_CONF},
+ {exam:'admin', cat:'confs', q:"Which command prints Splunk's merged, on-disk configuration and shows which file each setting came from?", o:["splunk show config","splunk btool <conf> list --debug","splunk diag","splunk validate"], a:[1], e:"<b>btool</b> (e.g. <code>splunk btool inputs list --debug</code>) prints the effective merged configuration and the <b>source file</b> of each setting - the go-to tool for troubleshooting precedence.", d:AD_BTOOL},
+ {exam:'admin', cat:'indexes', q:"What is the correct order of the Splunk index bucket lifecycle?", o:["hot → warm → cold → frozen","warm → hot → cold → frozen","hot → cold → warm → frozen","cold → warm → hot → frozen"], a:[0], e:"Buckets age <b>hot → warm → cold → frozen</b>. Hot is writable; warm and cold are searchable but read-only; frozen data is removed from the index (deleted or archived).", d:AD_IDX},
+ {exam:'admin', cat:'indexes', q:"By default, what happens to data when a bucket rolls to <b>frozen</b>?", o:["It is compressed and kept forever","It is deleted, unless a frozen archive path is configured","It is moved back to the hot bucket","It is re-indexed"], a:[1], e:"When a bucket reaches <b>frozen</b>, Splunk <b>deletes</b> it by default. If you set <code>coldToFrozenDir</code>, Splunk archives the bucket there instead of deleting it.", d:AD_RETAIN},
+ {exam:'admin', cat:'users', q:"How are Splunk users granted permission to perform actions such as editing knowledge objects or running real-time searches?", o:["Directly, per individual user","Through roles, which are collections of capabilities","Through the index they can see","Through the license"], a:[1], e:"Permissions come from <b>roles</b>, which are built from <b>capabilities</b>. Users are assigned one or more roles; you don't grant capabilities to users directly.", d:AD_USERS},
+ {exam:'admin', cat:'gdi', q:"You add a new data input without specifying an index. Where does the data go?", o:["It is discarded","Into the default index (main)","Into a new index named after the sourcetype","Into the _internal index"], a:[1], e:"Without an explicit index, events go to the <b>default index</b>, which is <b>main</b> unless changed. Best practice is to route data to purpose-built indexes.", d:AD_GDI},
+ {exam:'admin', cat:'forwarders', q:"What is the primary difference between a universal forwarder and a heavy forwarder?", o:["The universal forwarder parses data before sending; the heavy forwarder does not","The heavy forwarder is a full Splunk instance that can parse, filter, and route data; the universal forwarder is lightweight and forwards mostly unparsed data","They are identical","The universal forwarder has a web UI"], a:[1], e:"A <b>universal forwarder</b> is a lightweight agent that forwards <b>unparsed</b> data. A <b>heavy forwarder</b> is a full Splunk Enterprise instance that can <b>parse, filter, and route</b> data before forwarding.", d:AD_UF},
+ {exam:'admin', cat:'forwarders', q:"What is the role of the deployment server?", o:["It indexes data received from forwarders","It centrally distributes configuration (apps) to deployment clients such as forwarders","It runs all scheduled searches","It stores the license"], a:[1], e:"The <b>deployment server</b> centrally manages configuration by pushing <b>deployment apps</b> to <b>deployment clients</b> (like forwarders), so you don't configure each one by hand.", d:AD_DEPSRV},
+ {exam:'admin', cat:'inputs', q:"Which input continuously watches a file or directory and indexes new data as it is written?", o:["oneshot","monitor","upload","batch (delete after read)"], a:[1], e:"A <b>monitor</b> input continuously watches files/directories and indexes new events as they arrive. <b>oneshot</b> and <b>upload</b> load a file a single time.", d:AD_MON},
+ {exam:'admin', cat:'inputs', q:"What does the HTTP Event Collector (HEC) allow?", o:["Forwarders to send data over TCP","Applications to send data to Splunk over HTTP/HTTPS using a token","Users to run searches through REST","Indexers to replicate buckets"], a:[1], e:"<b>HEC</b> lets applications send data to Splunk directly over <b>HTTP/HTTPS</b>, authenticated with a <b>token</b> - agentless ingestion with no forwarder required.", d:AD_HEC},
+ {exam:'admin', cat:'parsing', q:"Which of these happens during the <b>parsing</b> phase (not the input or indexing phase)?", o:["Reading raw bytes from the source","Breaking the stream into events, extracting timestamps, and setting index-time metadata","Writing tsidx files to disk","Running the user's search"], a:[1], e:"The <b>parsing</b> phase breaks the incoming stream into <b>events</b>, identifies <b>timestamps</b>, and applies index-time fields/metadata. Writing data to disk happens later, in the <b>indexing</b> phase.", d:AD_DEPLOY},
+ {exam:'admin', cat:'parsing', q:"Which props.conf setting masks or replaces raw event text at index time using sed-style syntax?", o:["EXTRACT","SEDCMD","REPORT","FIELDALIAS"], a:[1], e:"<b>SEDCMD</b> applies sed-style substitution to <b>raw data at index time</b>, commonly used to anonymize or mask sensitive strings before the event is indexed.", d:AD_SED},
+ {exam:'admin', cat:'dsearch', q:"In distributed search, what does a search head do?", o:["It stores indexed data","It dispatches searches to indexers (search peers) and merges their results","It forwards raw data to indexers","It manages licenses"], a:[1], e:"A <b>search head</b> coordinates searches: it sends the search to <b>indexers (search peers)</b>, which run it against their data, then <b>merges</b> the returned results. Multiple search heads can form a <b>search head cluster</b> for scaling.", d:AD_DSRCH},
+];
 
 // ---- Exams in the Splunk onboarding path ----
 const EXAMS = [
