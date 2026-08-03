@@ -12,6 +12,12 @@
 <meta name="apple-mobile-web-app-title" content="Splunk Cert">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
+<meta property="og:title" content="Splunk Certification Trainer">
+<meta property="og:description" content="Practice exams, spaced-repetition review, and readiness tracking for Splunk certifications.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://rodney-splunk.github.io/splunk-cert-trainer/icon-512.png">
+<meta property="og:url" content="https://rodney-splunk.github.io/splunk-cert-trainer/">
+<meta name="twitter:card" content="summary">
 <style>
   :root{
     --bg:#0a0a0c; --bg2:#141417; --card:rgba(44,44,48,.55); --card-solid:#1c1c1e;
@@ -332,15 +338,43 @@ document.addEventListener('keydown',e=>{if(S.onKey)S.onKey(e);});
 
 /* ============ top bar (theme/sound) ============ */
 function topBar(){return `<div class="topbar">
+  <button class="iconbtn" id="tsettings" title="Settings">⚙️</button>
   <button class="iconbtn" id="ttheme" title="Theme">${themeIcon()}</button>
   <button class="iconbtn" id="tsound" title="Sound">${store.sound?'🔊':'🔇'}</button></div>`;}
-function wireTop(v){const a=v.querySelector('#ttheme'),b=v.querySelector('#tsound');if(a)a.onclick=cycleTheme;if(b)b.onclick=toggleSound;}
+function wireTop(v){const a=v.querySelector('#ttheme'),b=v.querySelector('#tsound'),g=v.querySelector('#tsettings');if(a)a.onclick=cycleTheme;if(b)b.onclick=toggleSound;if(g)g.onclick=settingsScreen;}
+function settingsScreen(){
+  currentRender=settingsScreen;
+  let kb=0;try{kb=Math.round(JSON.stringify(store).length/1024*10)/10;}catch(e){}
+  const v=$(`<div class="view">${topBar()}<button class="back" id="setback">← Back</button>
+    <div class="brand" style="margin-bottom:14px"><div class="logo">⚙️</div><h1>Settings</h1><p>Manage your study data</p></div>
+    <div class="glass" style="padding:16px;margin-bottom:12px">
+      <b>Backup &amp; restore</b>
+      <p style="color:var(--muted);font-size:.82rem;margin:6px 0 12px">Your progress is saved in this browser only. Export a backup to keep it safe or move it to another device or browser.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="expbtn">⬇ Export progress</button><button id="impbtn" class="ghost">⬆ Import progress</button><input type="file" id="impfile" accept="application/json,.json" style="display:none"></div>
+      <p style="color:var(--muted);font-size:.74rem;margin-top:8px">Storage used: ~${kb} KB</p>
+    </div>
+    <div class="glass" style="padding:16px">
+      <b>Danger zone</b>
+      <p style="color:var(--muted);font-size:.82rem;margin:6px 0 12px">Reset wipes all scores, streaks, flags, notes, and review schedules. This cannot be undone.</p>
+      <button id="resetbtn" class="ghost" style="color:var(--red);border-color:var(--red)">Reset all progress</button>
+    </div></div>`);
+  wireTop(v);
+  v.querySelector('#setback').onclick=menu;
+  v.querySelector('#expbtn').onclick=()=>{const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='splunk-trainer-progress.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);toast('⬇','Progress exported');};
+  const imp=v.querySelector('#impfile');
+  v.querySelector('#impbtn').onclick=()=>imp.click();
+  imp.onchange=(ev)=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const data=JSON.parse(rd.result);if(typeof data!=='object'||Array.isArray(data)||data===null)throw 0;Object.keys(DEFAULTS).forEach(k=>{if(data[k]!==undefined)store[k]=data[k];});saveStore();toast('✅','Progress imported');menu();}catch(e){toast('⚠️','Invalid backup file');}};rd.readAsText(f);};
+  v.querySelector('#resetbtn').onclick=()=>{if(confirm('Reset ALL progress? This cannot be undone.')){Object.keys(store).forEach(k=>delete store[k]);Object.assign(store,JSON.parse(JSON.stringify(DEFAULTS)));saveStore();toast('🗑','Progress reset');menu();}};
+  show(v);
+}
 let currentRender=()=>menu();
 function rerenderTop(){currentRender();}
 
 /* ============ MENU + dashboard ============ */
 function dashboard(){
   const li=levelInfo(store.xpTotal);
+  const qb=QUESTIONS.some(q=>q.exam===store.quickExam)?store.quickExam:'power';
+  const seenN=store.seenIds.filter(id=>QUESTIONS[id]&&QUESTIONS[id].exam===qb).length, totN=QUESTIONS.filter(q=>q.exam===qb).length;
   // strongest/weakest category by mastery (min 1 attempt)
   const cats=[...CAT_ORDER,...ADMIN_CAT_ORDER].map(k=>{const m=store.catMastery[k];return m&&m.t?{k,acc:m.c/m.t,t:m.t}:null}).filter(Boolean);
   let strong=null,weak=null;
@@ -356,7 +390,7 @@ function dashboard(){
       <div class="dstat"><b>${store.attempts}</b><span>Exams</span></div>
       <div class="dstat"><b>${store.bestScore}%</b><span>Best</span></div>
       <div class="dstat"><b>${store.passes}</b><span>Passes</span></div>
-      <div class="dstat"><b>${store.seenIds.length}/${QUESTIONS.length}</b><span>Answered</span></div>
+      <div class="dstat"><b>${seenN}/${totN}</b><span>Answered</span></div>
       <div class="dstat"><b>🔥 ${store.dailyStreak}</b><span>Day streak</span></div>
     </div>
     ${strong?`<div class="swrow">
@@ -545,20 +579,32 @@ function resumeQuiz(){
 }
 function appendix(){
   currentRender=appendix;
-  const list=curQ();
-  const items=list.map((q,n)=>`<div class="glass" style="padding:14px;margin-bottom:10px">
+  const list=curQ(), bank=curBank();
+  const cats=curOrderFor(bank).filter(k=>list.some(q=>q.cat===k));
+  const items=list.map((q,n)=>{
+    const txt=(q.q+' '+q.o.join(' ')+' '+q.e).replace(/<[^>]+>/g,'').toLowerCase().replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    return `<div class="apxcard glass" data-cat="${q.cat}" data-txt="${txt}" style="padding:14px;margin-bottom:10px">
     <div class="qcat" style="margin-bottom:6px">${n+1}. ${CATEGORIES[q.cat].name}${store.flaggedIds.includes(q.id)?' <span style="color:var(--amber)">⚑</span>':''}</div>
     <p style="font-weight:600;margin:.2rem 0">${q.q}</p>
     <div style="margin:.4rem 0">${q.o.map((o,i)=>`<div style="padding:2px 0;font-size:.92rem;color:${q.a.includes(i)?'var(--green)':'var(--muted)'}">${q.a.includes(i)?'✓ ':'· '}${o}</div>`).join('')}</div>
     <p style="font-size:.85rem;color:var(--muted);margin-top:.4rem">${q.e}</p>
     ${store.notes&&store.notes[q.id]?`<p style="font-size:.82rem;margin-top:.4rem;padding:8px 10px;background:rgba(255,171,61,.12);border-radius:8px">📝 ${store.notes[q.id].replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`:''}
     ${q.d?`<div class="doclink" style="margin-top:6px">📖 <a href="${q.d}" target="_blank" rel="noopener">Docs →</a></div>`:''}
-  </div>`).join('');
+  </div>`;}).join('');
   const v=$(`<div class="view">${topBar()}<button class="back" id="apxback">← Exit</button>
-    <div class="brand" style="margin-bottom:12px"><div class="logo">📚</div><h1>Appendix</h1><p>${S.exam?S.exam.name:''} · all ${list.length} questions &amp; answers</p></div>
-    ${items}</div>`);
+    <div class="brand" style="margin-bottom:12px"><div class="logo">📚</div><h1>Appendix</h1><p>${S.exam?S.exam.name:''} · <span id="apxcount">${list.length}</span> questions &amp; answers</p></div>
+    <div class="glass" style="padding:10px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:sticky;top:8px;z-index:5">
+      <input id="apxsearch" placeholder="🔍 Search questions & answers…" style="flex:1;min-width:150px;background:var(--card);border:1px solid var(--hair);border-radius:10px;color:var(--text);font:inherit;font-size:.85rem;padding:9px 12px">
+      <select id="apxcat" style="background:var(--card);border:1px solid var(--hair);border-radius:10px;color:var(--text);font:inherit;font-size:.82rem;padding:9px 10px"><option value="">All categories</option>${cats.map(k=>`<option value="${k}">${CATEGORIES[k].name}</option>`).join('')}</select>
+    </div>
+    <div id="apxlist">${items}</div></div>`);
   wireTop(v);
   v.querySelector('#apxback').onclick=examInfo;
+  const search=v.querySelector('#apxsearch'),catsel=v.querySelector('#apxcat'),cnt=v.querySelector('#apxcount');
+  const filter=()=>{const t=search.value.trim().toLowerCase(),c=catsel.value;let shown=0;
+    v.querySelectorAll('.apxcard').forEach(card=>{const ok=(!t||card.dataset.txt.includes(t))&&(!c||card.dataset.cat===c);card.style.display=ok?'':'none';if(ok)shown++;});
+    cnt.textContent=shown;};
+  search.oninput=filter;catsel.onchange=filter;
   show(v);
 }
 function question(){
@@ -581,7 +627,7 @@ function question(){
     <div class="opts" id="opts">${opts}</div><div id="ex"></div>
     <div class="qnav">
       ${exam?`<button id="next">${S.idx===S.order.length-1?'Finish exam →':'Next →'}</button>${S.idx>0?`<button id="prev" class="ghost">← Back</button>`:''}<button id="fin" class="ghost">Finish now</button>`
-            :`<button id="submit">Submit answer</button><button id="next" class="ghost" style="display:none">${S.idx===S.order.length-1?'See results →':'Next question →'}</button>`}
+            :`<button id="submit">Submit answer</button><button id="reveal" class="ghost">Reveal</button><button id="next" class="ghost" style="display:none">${S.idx===S.order.length-1?'See results →':'Next question →'}</button>`}
     </div></div>${notesBlock}${drawer}</div>`);
   const flag=v.querySelector('#flag');flag.onclick=()=>{
     const on=!store.flaggedIds.includes(Q.id);
@@ -596,6 +642,10 @@ function question(){
   }else{
     v.querySelector('#submit').onclick=()=>gradeNow(v,Q);
     v.querySelector('#next').onclick=()=>{S.idx++;S.idx<S.order.length?question():finish();};
+    const rv=v.querySelector('#reveal');if(rv)rv.onclick=()=>{if(S.answered)return;S.answered=true;
+      v.querySelectorAll('#opts .opt').forEach(o=>{const i=+o.dataset.i;o.classList.add('disabled');o.querySelector('input').disabled=true;if(Q.a.includes(i))o.classList.add('correct');else o.classList.add('dim');});
+      v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v">👀 Answer revealed <span style="color:var(--muted);font-weight:500;font-size:.8rem">· not scored</span></div>${Q.e}<div class="doclink">📖 <a href="${Q.d}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div>`;
+      v.querySelector('#submit').style.display='none';rv.style.display='none';const nx=v.querySelector('#next');nx.style.display='inline-block';nx.focus();};
   }
   const drw=v.querySelector('#qnavdrawer'),scr=v.querySelector('#qnavscrim');
   const openNav=o=>{drw.classList.toggle('open',o);scr.classList.toggle('open',o);};
@@ -630,6 +680,7 @@ function renderGraded(v,Q,picked,justAnswered,g){
     if(Q.a.includes(i))o.classList.add('correct');else if(picked.includes(i))o.classList.add('wrong');else o.classList.add('dim');});
   v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v ${ok?'ok':'no'}">${ok?'✓ Correct':'✕ Incorrect'}${ok&&g?`<span class="plusxp">+${g} XP</span>`:''}</div>${Q.e}<div class="doclink">📖 <a href="${Q.d}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div>`;
   const sb=v.querySelector('#submit');if(sb)sb.style.display='none';
+  const rvb=v.querySelector('#reveal');if(rvb)rvb.style.display='none';
   const nx=v.querySelector('#next');if(nx){nx.style.display='inline-block';if(justAnswered)nx.focus();}
 }
 function gradeNow(v,Q){
