@@ -248,6 +248,19 @@
   .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:120;background:var(--card-solid);border:1px solid var(--hair);
     border-radius:14px;padding:12px 18px;box-shadow:var(--shadow);font-weight:700;font-size:.9rem;animation:toastIn 3.4s ease forwards;display:flex;align-items:center;gap:10px}
   .toast .bi{font-size:1.3rem}
+  /* question navigator + notes */
+  .navtoggle{background:var(--card);border:1px solid var(--hair);color:var(--text);border-radius:10px;padding:6px 10px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:none}
+  .qnavscrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:59;display:none}
+  .qnavscrim.open{display:block}
+  .qnavdrawer{position:fixed;top:0;left:0;bottom:0;width:236px;max-width:82vw;background:var(--card-solid);border-right:1px solid var(--hair);box-shadow:8px 0 34px rgba(0,0,0,.42);padding:18px 16px;overflow-y:auto;z-index:60;transform:translateX(-102%);transition:transform .26s cubic-bezier(.34,1.36,.5,1)}
+  .qnavdrawer.open{transform:translateX(0)}
+  .navgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+  .navcell{aspect-ratio:1;border:1px solid var(--hair);border-radius:10px;background:var(--card);color:var(--text);font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;padding:0}
+  .navcell:hover{border-color:var(--accent)}
+  .navcell.ans{background:rgba(51,209,122,.18);border-color:rgba(51,209,122,.5)}
+  .navcell.cur{outline:2px solid var(--accent);outline-offset:1px}
+  .navcell.flg::after{content:'⚑';position:absolute;top:-5px;right:-3px;font-size:.68rem;color:var(--amber)}
+  .qnote{width:100%;background:transparent;border:1px solid var(--hair);border-radius:10px;padding:10px;color:var(--text);font:inherit;resize:vertical;min-height:44px}
 </style>
 </head>
 <body>
@@ -263,11 +276,12 @@ QUESTIONS.forEach((q,i)=>q.id=i);
 const byCat = {}; [...CAT_ORDER, ...ADMIN_CAT_ORDER].forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).map(q=>q.id));
 const curBank=()=>(S.exam&&QUESTIONS.some(q=>q.exam===S.exam.id))?S.exam.id:'power';
 const curQ=()=>QUESTIONS.filter(q=>q.exam===curBank());
-const curOrder=()=>curBank()==='admin'?ADMIN_CAT_ORDER:CAT_ORDER;
+const CAT_ORDERS={power:CAT_ORDER,admin:ADMIN_CAT_ORDER};
+const curOrder=()=>{const b=curBank();if(CAT_ORDERS[b])return CAT_ORDERS[b];const seen=[];QUESTIONS.forEach(q=>{if(q.exam===b&&!seen.includes(q.cat))seen.push(q.cat);});return seen.length?seen:CAT_ORDER;};
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',resume:null};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',resume:null};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -305,7 +319,7 @@ function awardBadges(session){const earned=[];BADGES.forEach(b=>{if(!store.badge
 function toast(icon,msg){const t=$(`<div class="toast"><span class="bi">${icon}</span>${msg}</div>`);document.body.appendChild(t);setTimeout(()=>t.remove(),3600);}
 
 /* ============ app state ============ */
-const S={exam:null,mode:'practice',order:[],idx:0,answers:{},score:0,streak:0,best:0,xp:0,answered:false,perCat:{},missed:[],flags:new Set(),timer:null,timeLeft:0,onKey:null,qCount:0};
+const S={exam:null,mode:'practice',order:[],idx:0,answers:{},score:0,streak:0,best:0,xp:0,answered:false,perCat:{},missed:[],flags:new Set(),graded:new Set(),timer:null,timeLeft:0,onKey:null,qCount:0};
 document.addEventListener('keydown',e=>{if(S.onKey)S.onKey(e);});
 
 /* ============ top bar (theme/sound) ============ */
@@ -446,7 +460,7 @@ function startQuiz(mode,ids,shuffle){
   clearResume();
   markStudiedToday();
   S.mode=mode; S.order=shuffle?shuffled(ids):ids.slice();
-  S.idx=0;S.score=0;S.streak=0;S.best=0;S.xp=0;S.perCat={};S.missed=[];S.answers={};S.flags=new Set();
+  S.idx=0;S.score=0;S.streak=0;S.best=0;S.xp=0;S.perCat={};S.missed=[];S.answers={};S.flags=new Set();S.graded=new Set();
   if(mode==='exam'){S.timeLeft=((S.exam&&S.exam.minutes)||57)*60;startTimer();}
   question();
 }
@@ -461,7 +475,7 @@ function saveResume(){
   if(!S.exam||!S.order||!S.order.length||S.idx>=S.order.length)return;
   store.resume={exam:S.exam.id,mode:S.mode,order:S.order.slice(),idx:S.idx,
     answers:JSON.parse(JSON.stringify(S.answers||{})),score:S.score,streak:S.streak,best:S.best,xp:S.xp,
-    perCat:JSON.parse(JSON.stringify(S.perCat||{})),missed:(S.missed||[]).slice(),flags:[...S.flags],timeLeft:S.timeLeft,qCount:S.qCount};
+    perCat:JSON.parse(JSON.stringify(S.perCat||{})),missed:(S.missed||[]).slice(),flags:[...S.flags],graded:[...S.graded],timeLeft:S.timeLeft,qCount:S.qCount};
   saveStore();
 }
 function clearResume(){ if(store.resume){store.resume=null;saveStore();} }
@@ -470,7 +484,7 @@ function resumeQuiz(){
   if(!r||!r.order||!r.order.length||r.order.some(id=>!QUESTIONS[id])||r.idx>=r.order.length){clearResume();examInfo();return;}
   markStudiedToday();
   S.mode=r.mode;S.order=r.order.slice();S.idx=r.idx;S.answers=r.answers||{};S.score=r.score||0;S.streak=r.streak||0;S.best=r.best||0;S.xp=r.xp||0;
-  S.perCat=r.perCat||{};S.missed=r.missed||[];S.flags=new Set(r.flags||[]);S.timeLeft=r.timeLeft||0;
+  S.perCat=r.perCat||{};S.missed=r.missed||[];S.flags=new Set(r.flags||[]);S.graded=new Set(r.graded||[]);S.timeLeft=r.timeLeft||0;
   if(S.mode==='exam'&&S.timeLeft>0)startTimer();
   question();
 }
@@ -482,6 +496,7 @@ function appendix(){
     <p style="font-weight:600;margin:.2rem 0">${q.q}</p>
     <div style="margin:.4rem 0">${q.o.map((o,i)=>`<div style="padding:2px 0;font-size:.92rem;color:${q.a.includes(i)?'var(--green)':'var(--muted)'}">${q.a.includes(i)?'✓ ':'· '}${o}</div>`).join('')}</div>
     <p style="font-size:.85rem;color:var(--muted);margin-top:.4rem">${q.e}</p>
+    ${store.notes&&store.notes[q.id]?`<p style="font-size:.82rem;margin-top:.4rem;padding:8px 10px;background:rgba(255,171,61,.12);border-radius:8px">📝 ${store.notes[q.id].replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`:''}
     ${q.d?`<div class="doclink" style="margin-top:6px">📖 <a href="${q.d}" target="_blank" rel="noopener">Docs →</a></div>`:''}
   </div>`).join('');
   const v=$(`<div class="view">${topBar()}<button class="back" id="apxback">← Exit</button>
@@ -499,7 +514,10 @@ function question(){
     <div class="lbl">Question<b>${S.idx+1} / ${S.order.length}</b></div><div class="spacer"></div>
     ${exam?`<div class="chip timer" id="timerchip">⏱ ${fmtTime(S.timeLeft)}</div>`:
        `<div class="chip streak ${S.streak>1?'on':''}"><span class="fi">🔥</span>${S.streak}</div><div class="chip xp">✦ ${S.xp}</div>`}
-    <button class="flagbtn ${S.flags.has(Q.id)||store.flaggedIds.includes(Q.id)?'on':''}" id="flag" title="Flag for review">⚑</button></div>`;
+    <button class="navtoggle" id="qnavt" title="Question navigator">☰</button><button class="flagbtn ${S.flags.has(Q.id)||store.flaggedIds.includes(Q.id)?'on':''}" id="flag" title="Flag for review">⚑</button></div>`;
+  const navCells=S.order.map((id,i)=>`<button class="navcell ${i===S.idx?'cur':''} ${(S.answers[id]&&S.answers[id].length)?'ans':''} ${(store.flaggedIds.includes(id)||S.flags.has(id))?'flg':''}" data-i="${i}">${i+1}</button>`).join('');
+  const drawer=`<div class="qnavscrim" id="qnavscrim"></div><div class="qnavdrawer" id="qnavdrawer"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b>Questions (${S.order.length})</b><button class="navtoggle" id="qnavclose">✕</button></div><p style="color:var(--muted);font-size:.72rem;margin:8px 0 0">🟩 answered · ⚑ flagged · tap to jump</p><div class="navgrid">${navCells}</div></div>`;
+  const notesBlock=exam?'':`<div class="glass" style="padding:12px;margin-top:10px"><label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">📝 Your notes for this question</label><textarea id="qnote" class="qnote" rows="2" placeholder="Jot a note… saved automatically">${(store.notes&&store.notes[Q.id])?store.notes[Q.id].replace(/&/g,'&amp;').replace(/</g,'&lt;'):''}</textarea></div>`;
   const opts=Q.o.map((o,i)=>`<label class="opt ${exam&&prevPick.includes(i)?'picked':''}" data-i="${i}">
     <input type="${multi?'checkbox':'radio'}" name="o" value="${i}" ${prevPick.includes(i)?'checked':''}><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
   const v=$(`<div class="view"><button class="back" id="qexit">← Exit</button>${bar}<div class="glass qcard">
@@ -509,7 +527,7 @@ function question(){
     <div class="qnav">
       ${exam?`<button id="next">${S.idx===S.order.length-1?'Finish exam →':'Next →'}</button>${S.idx>0?`<button id="prev" class="ghost">← Back</button>`:''}<button id="fin" class="ghost">Finish now</button>`
             :`<button id="submit">Submit answer</button><button id="next" class="ghost" style="display:none">${S.idx===S.order.length-1?'See results →':'Next question →'}</button>`}
-    </div></div></div>`);
+    </div></div>${notesBlock}${drawer}</div>`);
   const flag=v.querySelector('#flag');flag.onclick=()=>{
     const on=!store.flaggedIds.includes(Q.id);
     if(on){store.flaggedIds.push(Q.id);S.flags.add(Q.id);}else{store.flaggedIds=store.flaggedIds.filter(x=>x!==Q.id);S.flags.delete(Q.id);}
@@ -524,7 +542,15 @@ function question(){
     v.querySelector('#submit').onclick=()=>gradeNow(v,Q);
     v.querySelector('#next').onclick=()=>{S.idx++;S.idx<S.order.length?question():finish();};
   }
-  S.answered=false;
+  const drw=v.querySelector('#qnavdrawer'),scr=v.querySelector('#qnavscrim');
+  const openNav=o=>{drw.classList.toggle('open',o);scr.classList.toggle('open',o);};
+  v.querySelector('#qnavt').onclick=()=>openNav(true);
+  v.querySelector('#qnavclose').onclick=()=>openNav(false);
+  scr.onclick=()=>openNav(false);
+  v.querySelectorAll('.navcell').forEach(c=>c.onclick=()=>{if(exam)recordExam(v,Q);S.idx=+c.dataset.i;question();});
+  const note=v.querySelector('#qnote');
+  if(note)note.oninput=()=>{store.notes=store.notes||{};if(note.value.trim())store.notes[Q.id]=note.value;else delete store.notes[Q.id];saveStore();};
+  if(!exam&&S.graded.has(Q.id)){renderGraded(v,Q,S.answers[Q.id]||[],false,0);S.answered=true;}else{S.answered=false;}
   S.onKey=(e)=>{
     if(e.key>='1'&&e.key<=String(Q.o.length)){const i=+e.key-1;const inp=v.querySelector(`.opt[data-i="${i}"] input`);if(inp&&!inp.disabled){if(multi)inp.checked=!inp.checked;else inp.checked=true;}e.preventDefault();}
     else if(e.key==='Enter'){if(exam){v.querySelector('#next').click();}else{if(!S.answered)v.querySelector('#submit').click();else v.querySelector('#next').click();}e.preventDefault();}
@@ -542,19 +568,27 @@ function tally(Q,picked){
     const mi=store.missedIds.indexOf(Q.id);if(mi>=0)store.missedIds.splice(mi,1);return g;}
   else{S.streak=0;S.missed.push({q:Q.q,a:Q.a.map(i=>Q.o[i]).join(', '),e:Q.e,doc:Q.d,flag:S.flags.has(Q.id)});if(!store.missedIds.includes(Q.id))store.missedIds.push(Q.id);return 0;}
 }
+function renderGraded(v,Q,picked,justAnswered,g){
+  const ok=eq(picked,Q.a);
+  v.querySelectorAll('#opts .opt').forEach(o=>{const i=+o.dataset.i;o.classList.add('disabled');const inp=o.querySelector('input');inp.disabled=true;inp.checked=picked.includes(i);
+    if(Q.a.includes(i))o.classList.add('correct');else if(picked.includes(i))o.classList.add('wrong');else o.classList.add('dim');});
+  v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v ${ok?'ok':'no'}">${ok?'✓ Correct':'✕ Incorrect'}${ok&&g?`<span class="plusxp">+${g} XP</span>`:''}</div>${Q.e}<div class="doclink">📖 <a href="${Q.d}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div>`;
+  const sb=v.querySelector('#submit');if(sb)sb.style.display='none';
+  const nx=v.querySelector('#next');if(nx){nx.style.display='inline-block';if(justAnswered)nx.focus();}
+}
 function gradeNow(v,Q){
   if(S.answered)return;
   const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);
   if(!picked.length)return;
   S.answered=true;
-  const ok=eq(picked,Q.a);const g=tally(Q,picked);beep(ok);saveStore();
-  v.querySelectorAll('#opts .opt').forEach(o=>{const i=+o.dataset.i;o.classList.add('disabled');o.querySelector('input').disabled=true;
-    if(Q.a.includes(i))o.classList.add('correct');else if(picked.includes(i))o.classList.add('wrong');else o.classList.add('dim');});
-  v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v ${ok?'ok':'no'}">${ok?'✓ Correct':'✕ Incorrect'}${ok&&g?`<span class="plusxp">+${g} XP</span>`:''}</div>${Q.e}<div class="doclink">📖 <a href="${Q.d}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div>`;
+  const already=S.graded.has(Q.id);
+  const ok=eq(picked,Q.a); S.answers[Q.id]=picked;
+  const g=already?0:tally(Q,picked);
+  if(!already)S.graded.add(Q.id);
+  beep(ok);saveStore();
+  renderGraded(v,Q,picked,true,g);
   const sc=v.querySelector('.chip.streak');if(sc){sc.classList.toggle('on',S.streak>1);sc.innerHTML=`<span class="fi">🔥</span>${S.streak}`;}
   const xc=v.querySelector('.chip.xp');if(xc)xc.innerHTML=`✦ ${S.xp}`;
-  v.querySelector('#submit').style.display='none';
-  const nx=v.querySelector('#next');nx.style.display='inline-block';nx.focus();
 }
 function finish(){
   clearTimer();S.onKey=null;store.resume=null;
