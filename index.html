@@ -295,7 +295,7 @@ const curOrder=()=>{const b=curBank();if(CAT_ORDERS[b])return CAT_ORDERS[b];cons
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',hideNav:false,resume:null};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',resume:null};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -353,13 +353,6 @@ function settingsScreen(){
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="expbtn">⬇ Export progress</button><button id="impbtn" class="ghost">⬆ Import progress</button><input type="file" id="impfile" accept="application/json,.json" style="display:none"></div>
       <p style="color:var(--muted);font-size:.74rem;margin-top:8px">Storage used: ~${kb} KB</p>
     </div>
-    <div class="glass" style="padding:16px;margin-bottom:12px">
-      <b>Preferences</b>
-      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;cursor:pointer">
-        <span><span style="font-weight:600">Question navigator</span><br><span style="color:var(--muted);font-size:.78rem">Show the ☰ jump-to-question panel during a quiz</span></span>
-        <input type="checkbox" id="navpref" ${store.hideNav?'':'checked'} style="width:18px;height:18px;accent-color:var(--accent);flex-shrink:0">
-      </label>
-    </div>
     <div class="glass" style="padding:16px">
       <b>Danger zone</b>
       <p style="color:var(--muted);font-size:.82rem;margin:6px 0 12px">Reset wipes all scores, streaks, flags, notes, and review schedules. This cannot be undone.</p>
@@ -367,7 +360,6 @@ function settingsScreen(){
     </div></div>`);
   wireTop(v);
   v.querySelector('#setback').onclick=menu;
-  v.querySelector('#navpref').onchange=(e)=>{store.hideNav=!e.target.checked;saveStore();toast(store.hideNav?'🙈':'👁','Navigator '+(store.hideNav?'hidden':'shown'));};
   v.querySelector('#expbtn').onclick=()=>{const blob=new Blob([JSON.stringify(store,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='splunk-trainer-progress.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);toast('⬇','Progress exported');};
   const imp=v.querySelector('#impfile');
   v.querySelector('#impbtn').onclick=()=>imp.click();
@@ -623,9 +615,9 @@ function question(){
     <div class="lbl">Question<b>${S.idx+1} / ${S.order.length}</b></div><div class="spacer"></div>
     ${exam?`<div class="chip timer" id="timerchip">⏱ ${fmtTime(S.timeLeft)}</div>`:
        `<div class="chip streak ${S.streak>1?'on':''}"><span class="fi">🔥</span>${S.streak}</div><div class="chip xp">✦ ${S.xp}</div>`}
-    ${store.hideNav?'':`<button class="navtoggle" id="qnavt" title="Question navigator">☰</button>`}<button class="flagbtn ${S.flags.has(Q.id)||store.flaggedIds.includes(Q.id)?'on':''}" id="flag" title="Flag for review">⚑</button></div>`;
+    <button class="navtoggle" id="qnavt" title="Question navigator">☰</button><button class="flagbtn ${S.flags.has(Q.id)||store.flaggedIds.includes(Q.id)?'on':''}" id="flag" title="Flag for review">⚑</button></div>`;
   const navCells=S.order.map((id,i)=>`<button class="navcell ${i===S.idx?'cur':''} ${(S.answers[id]&&S.answers[id].length)?'ans':''} ${(store.flaggedIds.includes(id)||S.flags.has(id))?'flg':''}" data-i="${i}">${i+1}</button>`).join('');
-  const drawer=store.hideNav?'':`<div class="qnavscrim" id="qnavscrim"></div><div class="qnavdrawer" id="qnavdrawer"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b>Questions (${S.order.length})</b><button class="navtoggle" id="qnavclose">✕</button></div><p style="color:var(--muted);font-size:.72rem;margin:8px 0 0">🟩 answered · ⚑ flagged · tap to jump</p><div class="navgrid">${navCells}</div></div>`;
+  const drawer=`<div class="qnavscrim" id="qnavscrim"></div><div class="qnavdrawer" id="qnavdrawer"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b>Questions (${S.order.length})</b><button class="navtoggle" id="qnavclose" title="Hide panel">✕ Hide</button></div><p style="color:var(--muted);font-size:.72rem;margin:8px 0 0">🟩 answered · ⚑ flagged · tap to jump</p><div class="navgrid">${navCells}</div></div>`;
   const notesBlock=exam?'':`<div class="glass" style="padding:12px;margin-top:10px"><label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">📝 Your notes for this question</label><textarea id="qnote" class="qnote" rows="2" placeholder="Jot a note… saved automatically">${(store.notes&&store.notes[Q.id])?store.notes[Q.id].replace(/&/g,'&amp;').replace(/</g,'&lt;'):''}</textarea></div>`;
   const opts=Q.o.map((o,i)=>`<label class="opt ${exam&&prevPick.includes(i)?'picked':''}" data-i="${i}">
     <input type="${multi?'checkbox':'radio'}" name="o" value="${i}" ${prevPick.includes(i)?'checked':''}><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
