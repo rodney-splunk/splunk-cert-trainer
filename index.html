@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Splunk Certification Trainer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Splunk Cert">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
 <style>
   :root{
     --bg:#0a0a0c; --bg2:#141417; --card:rgba(44,44,48,.55); --card-solid:#1c1c1e;
@@ -281,7 +289,7 @@ const curOrder=()=>{const b=curBank();if(CAT_ORDERS[b])return CAT_ORDERS[b];cons
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',resume:null};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',resume:null};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -357,6 +365,37 @@ function dashboard(){
     <div class="badges">${badgeHTML}</div>
   </div>`;
 }
+/* ============ spaced repetition + readiness ============ */
+const DAY=86400000;
+const curOrderFor=(b)=>{if(CAT_ORDERS[b])return CAT_ORDERS[b];const seen=[];QUESTIONS.forEach(q=>{if(q.exam===b&&!seen.includes(q.cat))seen.push(q.cat);});return seen.length?seen:CAT_ORDER;};
+function updateSRS(id,ok){
+  const now=Date.now();
+  const s=store.srs[id]||{ease:2.3,reps:0,interval:0,due:now};
+  if(ok){
+    s.reps=(s.reps||0)+1;
+    s.interval=s.reps===1?1:s.reps===2?3:Math.round((s.interval||1)*(s.ease||2.3));
+    s.ease=Math.min(2.8,(s.ease||2.3)+0.1);
+    s.due=now+s.interval*DAY;
+  }else{
+    s.reps=0;s.interval=0;s.ease=Math.max(1.3,(s.ease||2.3)-0.2);s.due=now;
+  }
+  s.last=now;store.srs[id]=s;
+}
+function dueIds(bank){const now=Date.now();return Object.keys(store.srs).map(Number).filter(id=>QUESTIONS[id]&&QUESTIONS[id].exam===bank&&store.srs[id].due<=now);}
+function buildDaily(bank,target){
+  target=target||20;
+  const due=dueIds(bank).sort((a,b)=>store.srs[a].due-store.srs[b].due);
+  if(due.length>=target)return due.slice(0,target);
+  const unseen=QUESTIONS.filter(q=>q.exam===bank&&!store.srs[q.id]).map(q=>q.id);
+  return due.concat(shuffled(unseen).slice(0,target-due.length));
+}
+function readiness(bank){
+  const ord=curOrderFor(bank);let wsum=0,score=0;
+  ord.forEach(k=>{const w=(CATEGORIES[k]&&CATEGORIES[k].weight)||1;const m=store.catMastery[k];wsum+=w;if(m&&m.t)score+=w*(m.c/m.t);});
+  return wsum?Math.round(score/wsum*100):0;
+}
+function daysLeft(examId){const d=store.examDates[examId];if(!d)return null;return Math.ceil((new Date(d+'T00:00:00')-Date.now())/DAY);}
+function gaugeSVG(pct){const r=34,c=2*Math.PI*r,col=pct>=80?'var(--green)':pct>=60?'var(--amber)':'var(--accent)';return `<svg viewBox="0 0 84 84" style="width:84px;height:84px;transform:rotate(-90deg)"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--hair)" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c*(1-pct/100)}"/></svg>`;}
 function menu(){
   currentRender=menu;
   const readyExams=EXAMS.filter(e=>e.status==='ready');
@@ -393,10 +432,12 @@ function examInfo(){
   const hasMissed=store.missedIds.some(id=>QUESTIONS[id]&&QUESTIONS[id].exam===bank);
   const flaggedCount=store.flaggedIds.filter(id=>QUESTIONS[id]&&QUESTIONS[id].exam===bank).length;
   const resumeAvail=!!(store.resume&&store.resume.exam===bank&&store.resume.order&&store.resume.idx<store.resume.order.length);
+  const readyPct=readiness(bank), dueCount=dueIds(bank).length, dLeft=daysLeft(e.id);
   const catCard=k=>{const c=CATEGORIES[k];return `<div class="glass cat"><div class="w">${c.weight}%</div><div class="body"><b>${c.name}</b><p>${c.blurb}</p></div><a href="${c.doc}" target="_blank" rel="noopener">Docs →</a></div>`;};
   const cats3=ord.slice(0,3).map(catCard).join('');
   const catsRest=ord.slice(3).map(catCard).join('');
   const modes=`
+    <div class="glass mode rec" data-m="daily"><div class="mi">🗓️</div><div><b>Daily Review<span class="rectag">Spaced</span></b><p>${dueCount?`${dueCount} due today`:'Build your review queue'} · spaced repetition.</p></div><div class="arr">›</div></div>
     ${resumeAvail?`<div class="glass mode rec" data-m="resume"><div class="mi">⏯️</div><div><b>Continue<span class="rectag">Resume</span></b><p>Pick up your ${store.resume.mode} session at Q ${store.resume.idx+1} / ${store.resume.order.length}.</p></div><div class="arr">›</div></div>`:''}
     <div class="glass mode ${resumeAvail?'':'rec'}" data-m="practice"><div class="mi">📝</div><div><b>Practice${resumeAvail?'':'<span class="rectag">Start here</span>'}</b><p>All ${aq.length} questions, instant feedback + docs.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="exam"><div class="mi">⏱️</div><div><b>Timed Exam</b><p>${e.minutes}-min countdown, feedback at the end.</p></div><div class="arr">›</div></div>
@@ -417,6 +458,18 @@ function examInfo(){
         <div class="stat"><b>${e.minutes}<small style="font-size:.9rem"> min</small></b><span>Real exam</span></div></div>
       <div class="facts">${e.facts.map(f=>`<div class="fact">✓ ${f}</div>`).join('')}</div>
       ${e.url?`<div class="doclink" style="margin-top:14px">🔗 <a href="${e.url}" target="_blank" rel="noopener">Official Splunk exam page →</a></div>`:''}</div>
+    <div class="glass" style="display:flex;align-items:center;gap:16px;padding:16px;margin-bottom:2px">
+      <div style="position:relative;flex-shrink:0">${gaugeSVG(readyPct)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><b style="font-size:1.15rem">${readyPct}%</b></div></div>
+      <div style="flex:1;min-width:0">
+        <b style="font-size:.95rem">${readyPct>=80?'Exam-ready 🎯':readyPct>=60?'Almost there':'Keep building'}</b>
+        <p style="color:var(--muted);font-size:.8rem;margin:2px 0 8px">Readiness = weighted mastery across the blueprint${dueCount?` · <b style="color:var(--accent)">${dueCount} due for review</b>`:''}</p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <label style="font-size:.74rem;color:var(--muted)">Exam date</label>
+          <input type="date" id="examdate" value="${store.examDates[e.id]||''}" style="background:var(--card);border:1px solid var(--hair);border-radius:8px;color:var(--text);font:inherit;font-size:.76rem;padding:4px 8px">
+          ${dLeft!=null?`<span style="font-size:.78rem;font-weight:700;color:${dLeft<=7?'var(--accent)':'var(--text)'}">${dLeft>0?dLeft+' days left':dLeft===0?'Exam today!':'past date'}</span>`:''}
+        </div>
+      </div>
+    </div>
     <div class="section-title">👉 Tap a mode to start</div>
     <div class="modes">${modes}</div>
     <div class="lenrow"><span class="lenlabel">Questions <span style="color:var(--muted);font-weight:500;font-size:.8rem">· Practice &amp; Timed Exam</span></span>
@@ -436,6 +489,7 @@ function examInfo(){
   const shuf=()=>v.querySelector('#shuf').checked;
   v.querySelectorAll('.mode').forEach(m=>{if(m.classList.contains('dis'))return;m.onclick=()=>{
     const mode=m.dataset.m;
+    if(mode==='daily'){startQuiz('daily',buildDaily(bank,20),false);return;}
     if(mode==='resume'){resumeQuiz();return;}
     if(mode==='appendix'){appendix();return;}
     if(mode==='commands'){startCommandQuiz();return;}
@@ -448,6 +502,7 @@ function examInfo(){
   };});
   v.querySelectorAll('#qcount .seg').forEach(s=>s.onclick=()=>{S.qCount=+s.dataset.n; v.querySelectorAll('#qcount .seg').forEach(x=>x.classList.toggle('on',x===s));});
   v.querySelector('#drillsel').onchange=(ev)=>{const k=ev.target.value;if(k)startQuiz('drill',byCat[k].slice(),true);};
+  const ed=v.querySelector('#examdate');if(ed)ed.onchange=(ev)=>{store.examDates[e.id]=ev.target.value;saveStore();examInfo();};
   const more=v.querySelector('#bpmore'), tg=v.querySelector('#bptoggle');
   tg.onclick=()=>{const open=more.style.display!=='none';more.style.display=open?'none':'block';tg.textContent=open?'See all 10 categories ↓':'See less ↑';};
   show(v);
@@ -563,6 +618,7 @@ function tally(Q,picked){
   if(!store.seenIds.includes(Q.id))store.seenIds.push(Q.id);
   const pc=S.perCat[Q.cat]||(S.perCat[Q.cat]={c:0,t:0});pc.t++;
   const ok=picked.length&&eq(picked,Q.a);
+  updateSRS(Q.id,!!ok);
   const m=store.catMastery[Q.cat]||(store.catMastery[Q.cat]={c:0,t:0});m.t++;
   if(ok){pc.c++;m.c++;S.score++;S.streak++;S.best=Math.max(S.best,S.streak);const g=10+Math.max(0,(S.streak-1)*2);S.xp+=g;
     const mi=store.missedIds.indexOf(Q.id);if(mi>=0)store.missedIds.splice(mi,1);return g;}
@@ -776,5 +832,6 @@ function reviewPicker(){
 applyTheme();
 menu();
 </script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
 </body>
 </html>
