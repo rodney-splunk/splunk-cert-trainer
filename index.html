@@ -428,7 +428,7 @@ function readiness(bank){
   ord.forEach(k=>{const w=(CATEGORIES[k]&&CATEGORIES[k].weight)||1;const m=store.catMastery[k];wsum+=w;if(m&&m.t)score+=w*(m.c/m.t);});
   return wsum?Math.round(score/wsum*100):0;
 }
-function daysLeft(examId){const d=store.examDates[examId];if(!d)return null;return Math.ceil((new Date(d+'T00:00:00')-Date.now())/DAY);}
+function daysLeft(examId){const d=store.examDates[examId];if(!d)return null;const ms=new Date(d+'T00:00:00')-Date.now();return isNaN(ms)?null:Math.ceil(ms/DAY);}
 function gaugeSVG(pct){const r=34,c=2*Math.PI*r,col=pct>=80?'var(--green)':pct>=60?'var(--amber)':'var(--accent)';return `<svg viewBox="0 0 84 84" style="width:84px;height:84px;transform:rotate(-90deg)"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--hair)" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c*(1-pct/100)}"/></svg>`;}
 function menu(){
   currentRender=menu;
@@ -636,9 +636,9 @@ function question(){
   };
   v.querySelector('#qexit').onclick=()=>{clearTimer();S.onKey=null;saveResume();examInfo();};
   if(exam){
-    v.querySelector('#next').onclick=()=>{recordExam(v,Q);if(S.idx===S.order.length-1)finish();else{S.idx++;question();}};
+    v.querySelector('#next').onclick=()=>{recordExam(v,Q);if(S.idx===S.order.length-1){if(confirmSubmit())finish();}else{S.idx++;question();}};
     const p=v.querySelector('#prev');if(p)p.onclick=()=>{recordExam(v,Q);S.idx--;question();};
-    v.querySelector('#fin').onclick=()=>{recordExam(v,Q);finish();};
+    v.querySelector('#fin').onclick=()=>{recordExam(v,Q);if(confirmSubmit())finish();};
   }else{
     v.querySelector('#submit').onclick=()=>gradeNow(v,Q);
     v.querySelector('#next').onclick=()=>{S.idx++;S.idx<S.order.length?question():finish();};
@@ -664,6 +664,14 @@ function question(){
   show(v);
 }
 function recordExam(v,Q){const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);S.answers[Q.id]=picked;}
+function examUnanswered(){return S.order.filter(id=>!(S.answers[id]&&S.answers[id].length)).length;}
+function confirmSubmit(){
+  const un=examUnanswered();
+  const fl=S.order.filter(id=>S.flags.has(id)||store.flaggedIds.includes(id)).length;
+  if(!un&&!fl)return true;
+  const bits=[];if(un)bits.push(un+' unanswered');if(fl)bits.push(fl+' flagged');
+  return confirm('You have '+bits.join(' and ')+'. Submit the exam anyway?');
+}
 function tally(Q,picked){
   if(!store.seenIds.includes(Q.id))store.seenIds.push(Q.id);
   const pc=S.perCat[Q.cat]||(S.perCat[Q.cat]={c:0,t:0});pc.t++;
@@ -672,7 +680,7 @@ function tally(Q,picked){
   const m=store.catMastery[Q.cat]||(store.catMastery[Q.cat]={c:0,t:0});m.t++;
   if(ok){pc.c++;m.c++;S.score++;S.streak++;S.best=Math.max(S.best,S.streak);const g=10+Math.max(0,(S.streak-1)*2);S.xp+=g;
     const mi=store.missedIds.indexOf(Q.id);if(mi>=0)store.missedIds.splice(mi,1);return g;}
-  else{S.streak=0;S.missed.push({q:Q.q,a:Q.a.map(i=>Q.o[i]).join(', '),e:Q.e,doc:Q.d,flag:S.flags.has(Q.id)});if(!store.missedIds.includes(Q.id))store.missedIds.push(Q.id);return 0;}
+  else{S.streak=0;S.missed.push({q:Q.q,a:Q.a.map(i=>Q.o[i]).join(', '),yours:picked.length?picked.map(i=>Q.o[i]).join(', '):'(not answered)',e:Q.e,doc:Q.d,flag:S.flags.has(Q.id)});if(!store.missedIds.includes(Q.id))store.missedIds.push(Q.id);return 0;}
 }
 function renderGraded(v,Q,picked,justAnswered,g){
   const ok=eq(picked,Q.a);
@@ -729,7 +737,7 @@ function results(pct,pass,total,earned){
     :`<div class="glass allgood">🎯 No weak areas - every category at 75%+. Nicely done!</div>`;
   const missedSorted=[...S.missed].sort((a,b)=>(b.flag?1:0)-(a.flag?1:0));
   const review=S.missed.length?`<div class="section-title">Review · ${S.missed.length} missed${S.flags.size?` · ${[...S.flags].length} flagged`:''}</div>`+
-    missedSorted.map(m=>`<div class="rev ${m.flag?'flag':''}"><div class="q">${m.flag?'⚑ ':''}${m.q}</div><div class="a">Answer: ${m.a}</div><div style="color:var(--muted);margin-top:4px">${m.e}</div><div class="doclink">📖 <a href="${m.doc}" target="_blank" rel="noopener">Docs →</a></div></div>`).join(''):'';
+    missedSorted.map(m=>`<div class="rev ${m.flag?'flag':''}"><div class="q">${m.flag?'⚑ ':''}${m.q}</div>${m.yours!==undefined?`<div class="a" style="color:var(--red)">✗ Your answer: ${m.yours}</div>`:''}<div class="a" style="color:var(--green)">✓ Correct: ${m.a}</div><div style="color:var(--muted);margin-top:4px">${m.e}</div><div class="doclink">📖 <a href="${m.doc}" target="_blank" rel="noopener">Docs →</a></div></div>`).join(''):'';
   const modeLabel={practice:'Practice',exam:'Timed Exam',drill:'Category Drill',missed:'Review Missed',challenge:'Challenge Round'}[S.mode]||'Practice';
   const v=$(`<div class="view">${topBar()}
     <div class="glass res"><div class="scorewrap"><svg width="190" height="190">
