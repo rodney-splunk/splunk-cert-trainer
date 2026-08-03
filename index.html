@@ -444,8 +444,8 @@ function menu(){
     ${e.status==='ready'?`<div class="go">▶ Start studying</div>`:(e.url?`<a class="official" href="${e.url}" target="_blank" rel="noopener">Official exam page ↗</a>`:`<div class="soonhint">Coming soon</div>`)}</div>`).join('');
   const v=$(`<div class="view">${topBar()}
     <div class="brand"><div class="logo">🔍</div><h1>Splunk Certification Trainer</h1><p>Your onboarding cert path</p></div>
-    ${readyExams.length>1?`<div class="segmented" id="qtoggle" style="max-width:360px;margin:0 auto 12px">${readyExams.map(e=>`<button class="seg ${e.id===qExam.id?'on':''}" data-id="${e.id}">${e.code||e.name}</button>`).join('')}</div>`:''}
-    ${qExam?`<button class="hero-cta" id="quickstart"><span>▶ Start ${qExam.name}</span><small>${QUESTIONS.filter(q=>q.exam===examBank(qExam)).length} questions · choose a mode next</small></button>`:''}
+    ${readyExams.length>1?`<div class="segmented" id="qtoggle" style="max-width:360px;margin:0 auto 12px">${readyExams.map(e=>`<button class="seg ${e.id===qExam.id?'on':''}" data-id="${e.id}" style="${e.id===qExam.id?`color:${e.color}`:''}"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.color};margin-right:6px;vertical-align:middle"></span>${e.code||e.name}</button>`).join('')}</div>`:''}
+    ${qExam?`<button class="hero-cta" id="quickstart" style="background:linear-gradient(180deg,${qExam.color},${qExam.color}cc);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 18px ${qExam.color}55"><span>▶ Start ${qExam.name}</span><small>${QUESTIONS.filter(q=>q.exam===examBank(qExam)).length} questions · choose a mode next</small></button>`:''}
     ${dashboard()}
     <div class="section-title" style="text-align:center">Choose an exam</div>
     <div class="grid">${cards}</div>
