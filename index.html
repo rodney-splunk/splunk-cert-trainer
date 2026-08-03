@@ -239,8 +239,8 @@
   .res{padding:32px;text-align:center}
   .scorewrap{position:relative;width:190px;height:190px;margin:6px auto 4px}
   .scorewrap svg{transform:rotate(-90deg)}
-  .scorewrap .num{position:absolute;inset:0;display:grid;place-items:center;font-weight:850;font-size:2.9rem;letter-spacing:-.03em}
-  .scorewrap .num small{font-size:.8rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;display:block}
+  .scorewrap .num{position:absolute;inset:0;display:grid;place-items:center;font-weight:850;font-size:2.6rem;letter-spacing:-.03em;line-height:1}
+  .scorewrap .num small{font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;display:block;margin-top:5px}
   .pill{display:inline-block;padding:7px 16px;border-radius:99px;font-weight:800;font-size:.82rem;letter-spacing:.04em;margin-top:6px}
   .pill.pass{background:rgba(51,209,122,.16);color:var(--green)}.pill.fail{background:rgba(255,90,82,.16);color:var(--red)}
   .kv{display:flex;justify-content:center;gap:20px;margin-top:14px;color:var(--muted);font-size:.85rem;flex-wrap:wrap}.kv b{color:var(--text)}
@@ -726,7 +726,7 @@ function finish(){
 /* ============ RESULTS ============ */
 function results(pct,pass,total,earned){
   currentRender=()=>results(pct,pass,total,[]);
-  const r=52,c=2*Math.PI*r;
+  const r=76,c=2*Math.PI*r;
   const cats=[...CAT_ORDER,...ADMIN_CAT_ORDER].filter(k=>S.perCat[k]).map(k=>{const p=S.perCat[k],acc=Math.round(p.c/p.t*100);const col=acc>=75?'var(--green)':acc>=50?'var(--amber)':'var(--red)';return{k,acc,p,col};});
   const bars=cats.map(x=>`<div class="catrow"><div class="cn">${CATEGORIES[x.k].name}<span>${x.p.c}/${x.p.t} correct</span></div>
     <div class="track"><i data-w="${x.acc}" style="background:${x.col}"></i></div><div class="pct" style="color:${x.col}">${x.acc}%</div></div>`).join('');
