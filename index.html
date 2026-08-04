@@ -264,6 +264,21 @@
   .toast .bi{font-size:1.3rem}
   /* question notes */
   .qnote{width:100%;background:transparent;border:1px solid var(--hair);border-radius:10px;padding:10px;color:var(--text);font:inherit;resize:vertical;min-height:44px}
+  /* question overview (Udemy-style jump list) */
+  .qoverview{margin-top:10px;border:1px solid var(--hair);border-radius:14px;background:var(--card);overflow:hidden}
+  .qoverview>summary{cursor:pointer;padding:13px 15px;font-weight:700;font-size:.85rem;color:var(--text);list-style:none;display:flex;align-items:center;gap:8px}
+  .qoverview>summary::-webkit-details-marker{display:none}
+  .qoverview>summary::before{content:'▸';color:var(--muted);transition:transform .2s;font-size:.8rem}
+  .qoverview[open]>summary::before{transform:rotate(90deg)}
+  .qov-hint{color:var(--muted);font-weight:500;font-size:.72rem;margin-left:auto}
+  .qov-list{max-height:360px;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--hair)}
+  .qov-row{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:9px 10px;color:var(--text);font:inherit;font-size:.82rem;font-weight:500;cursor:pointer;box-shadow:none}
+  .qov-row:hover{border-color:var(--hair);background:var(--card-solid)}
+  .qov-row.cur{border-color:var(--accent);background:rgba(255,106,43,.1)}
+  .qov-num{flex-shrink:0;width:27px;height:27px;border-radius:8px;background:var(--hair);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem}
+  .qov-row.ans .qov-num{background:rgba(51,209,122,.22);color:var(--green)}
+  .qov-txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qov-stat{flex-shrink:0;font-size:.82rem;letter-spacing:2px}
 </style>
 </head>
 <body>
@@ -606,6 +621,9 @@ function question(){
        `<div class="chip streak ${S.streak>1?'on':''}"><span class="fi">🔥</span>${S.streak}</div><div class="chip xp">✦ ${S.xp}</div>`}
     <button class="flagbtn ${S.flags.has(Q.id)||store.flaggedIds.includes(Q.id)?'on':''}" id="flag" title="Flag for review">⚑</button></div>`;
   const notesBlock=exam?'':`<div class="glass" style="padding:12px;margin-top:10px"><label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">📝 Your notes for this question</label><textarea id="qnote" class="qnote" rows="2" placeholder="Jot a note… saved automatically">${(store.notes&&store.notes[Q.id])?store.notes[Q.id].replace(/&/g,'&amp;').replace(/</g,'&lt;'):''}</textarea></div>`;
+  const ovRows=S.order.map((id,i)=>{const qq=QUESTIONS[id];const preview=qq.q.replace(/<[^>]+>/g,'');const ans=(S.answers[id]&&S.answers[id].length);const flg=store.flaggedIds.includes(id)||S.flags.has(id);
+    return `<button class="qov-row ${i===S.idx?'cur':''} ${ans?'ans':''}" data-i="${i}"><span class="qov-num">${i+1}</span><span class="qov-txt">${preview.length>90?preview.slice(0,90)+'…':preview}</span><span class="qov-stat">${flg?'⚑':''}</span></button>`;}).join('');
+  const overview=`<details class="qoverview"><summary>📋 All questions <span class="qov-hint">tap any to jump · ${S.order.length} total</span></summary><div class="qov-list">${ovRows}</div></details>`;
   const opts=Q.o.map((o,i)=>`<label class="opt ${exam&&prevPick.includes(i)?'picked':''}" data-i="${i}">
     <input type="${multi?'checkbox':'radio'}" name="o" value="${i}" ${prevPick.includes(i)?'checked':''}><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
   const v=$(`<div class="view"><button class="back" id="qexit">← Exit</button>${bar}<div class="glass qcard">
@@ -615,7 +633,7 @@ function question(){
     <div class="qnav">
       ${exam?`<button id="next">${S.idx===S.order.length-1?'Finish exam →':'Next →'}</button>${S.idx>0?`<button id="prev" class="ghost">← Back</button>`:''}<button id="fin" class="ghost">Finish now</button>`
             :`<button id="submit">Submit answer</button><button id="reveal" class="ghost">Reveal</button><button id="next" class="ghost" style="display:none">${S.idx===S.order.length-1?'See results →':'Next question →'}</button>`}
-    </div></div>${notesBlock}</div>`);
+    </div></div>${overview}${notesBlock}</div>`);
   const flag=v.querySelector('#flag');flag.onclick=()=>{
     const on=!store.flaggedIds.includes(Q.id);
     if(on){store.flaggedIds.push(Q.id);S.flags.add(Q.id);}else{store.flaggedIds=store.flaggedIds.filter(x=>x!==Q.id);S.flags.delete(Q.id);}
@@ -634,6 +652,7 @@ function question(){
       v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v">👀 Answer revealed <span style="color:var(--muted);font-weight:500;font-size:.8rem">· not scored</span></div>${Q.e}<div class="doclink">📖 <a href="${Q.d}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div>`;
       v.querySelector('#submit').style.display='none';rv.style.display='none';const nx=v.querySelector('#next');nx.style.display='inline-block';nx.focus();};
   }
+  v.querySelectorAll('.qov-row').forEach(r=>r.onclick=()=>{if(exam)recordExam(v,Q);S.idx=+r.dataset.i;question();});
   const note=v.querySelector('#qnote');
   if(note)note.oninput=()=>{store.notes=store.notes||{};if(note.value.trim())store.notes[Q.id]=note.value;else delete store.notes[Q.id];saveStore();};
   if(!exam&&S.graded.has(Q.id)){renderGraded(v,Q,S.answers[Q.id]||[],false,0);S.answered=true;}else{S.answered=false;}
