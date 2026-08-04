@@ -270,6 +270,12 @@
   .qside{width:250px;flex-shrink:0;position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;border:1px solid var(--hair);border-radius:16px;background:var(--card);overflow:hidden}
   .qside-hd{padding:13px 15px;font-weight:800;font-size:.8rem;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:8px}
   .qside-hd span{margin-left:auto;color:var(--muted);font-weight:600;font-size:.75rem}
+  .qside-x{background:transparent;border:0;color:var(--muted);font-size:1.1rem;font-weight:800;cursor:pointer;box-shadow:none;padding:0 2px 0 8px;line-height:1}
+  .qside-x:hover{color:var(--text)}
+  .qside-show{display:none;align-items:center;gap:7px;background:var(--card);border:1px solid var(--hair);color:var(--text);border-radius:10px;padding:8px 13px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:none;margin-bottom:11px}
+  .qside-show:hover{border-color:var(--accent)}
+  .qlayout.side-hidden .qside{display:none}
+  .qlayout.side-hidden .qside-show{display:inline-flex}
   .qov-list{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:4px}
   .qov-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:8px 9px;color:var(--text);font:inherit;font-size:.8rem;font-weight:500;cursor:pointer;box-shadow:none}
   .qov-row:hover{border-color:var(--hair);background:var(--card-solid)}
@@ -302,7 +308,7 @@ const curOrder=()=>{const b=curBank();if(CAT_ORDERS[b])return CAT_ORDERS[b];cons
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',resume:null};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',sideHidden:false,resume:null};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -626,10 +632,10 @@ function question(){
   const notesBlock=exam?'':`<div class="glass" style="padding:12px;margin-top:10px"><label style="font-size:.8rem;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">📝 Your notes for this question</label><textarea id="qnote" class="qnote" rows="2" placeholder="Jot a note… saved automatically">${(store.notes&&store.notes[Q.id])?store.notes[Q.id].replace(/&/g,'&amp;').replace(/</g,'&lt;'):''}</textarea></div>`;
   const ovRows=S.order.map((id,i)=>{const qq=QUESTIONS[id];const preview=qq.q.replace(/<[^>]+>/g,'');const ans=(S.answers[id]&&S.answers[id].length);const flg=store.flaggedIds.includes(id)||S.flags.has(id);
     return `<button class="qov-row ${i===S.idx?'cur':''} ${ans?'ans':''}" data-i="${i}"><span class="qov-num">${i+1}</span><span class="qov-txt">${preview.length>90?preview.slice(0,90)+'…':preview}</span><span class="qov-stat">${flg?'⚑':''}</span></button>`;}).join('');
-  const overview=`<aside class="qside"><div class="qside-hd">📋 Questions <span>${S.order.length}</span></div><div class="qov-list">${ovRows}</div></aside>`;
+  const overview=`<aside class="qside"><div class="qside-hd">📋 Questions <span>${S.order.length}</span><button class="qside-x" id="sidehide" title="Hide panel">«</button></div><div class="qov-list">${ovRows}</div></aside>`;
   const opts=Q.o.map((o,i)=>`<label class="opt ${exam&&prevPick.includes(i)?'picked':''}" data-i="${i}">
     <input type="${multi?'checkbox':'radio'}" name="o" value="${i}" ${prevPick.includes(i)?'checked':''}><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
-  const v=$(`<div class="view"><button class="back" id="qexit">← Exit</button><div class="qlayout">${overview}<div class="qmain">${bar}<div class="glass qcard">
+  const v=$(`<div class="view"><button class="back" id="qexit">← Exit</button><div class="qlayout ${store.sideHidden?'side-hidden':''}">${overview}<div class="qmain"><button class="qside-show" id="sideshow" title="Show questions panel">📋 Questions</button>${bar}<div class="glass qcard">
     <div class="qcat">${CATEGORIES[Q.cat].name}${Q.hard?`<span class="chall">⚡ Challenge</span>`:''}${S.mode==='drill'?' · drill':S.mode==='missed'?' · review':''}${store.seenIds.includes(Q.id)?`<span style="margin-left:8px;font-size:.7rem;color:var(--muted);font-weight:600">✓ Seen</span>`:''}</div>
     <p class="qtext">${Q.q}</p>${multi?`<p class="multi">✔ Select all that apply</p>`:``}
     <div class="opts" id="opts">${opts}</div><div id="ex"></div>
@@ -656,6 +662,9 @@ function question(){
       v.querySelector('#submit').style.display='none';rv.style.display='none';const nx=v.querySelector('#next');nx.style.display='inline-block';nx.focus();};
   }
   v.querySelectorAll('.qov-row').forEach(r=>r.onclick=()=>{if(exam)recordExam(v,Q);S.idx=+r.dataset.i;question();});
+  const layout=v.querySelector('.qlayout');
+  const sideHide=v.querySelector('#sidehide');if(sideHide)sideHide.onclick=()=>{layout.classList.add('side-hidden');store.sideHidden=true;saveStore();};
+  const sideShow=v.querySelector('#sideshow');if(sideShow)sideShow.onclick=()=>{layout.classList.remove('side-hidden');store.sideHidden=false;saveStore();};
   const note=v.querySelector('#qnote');
   if(note)note.oninput=()=>{store.notes=store.notes||{};if(note.value.trim())store.notes[Q.id]=note.value;else delete store.notes[Q.id];saveStore();};
   if(!exam&&S.graded.has(Q.id)){renderGraded(v,Q,S.answers[Q.id]||[],false,0);S.answered=true;}else{S.answered=false;}
