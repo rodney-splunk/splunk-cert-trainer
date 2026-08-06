@@ -763,7 +763,7 @@ function labMode(){
   currentRender=labMode; S.onKey=null; try{clearTimer();}catch(e){}
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // ---- simulated environment state ----
-  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],tcp:[],udp:[],scripts:[],hec:false,hectoken:null,fs:{},tree:{},cwd:null,lic:'Enterprise',deploy:null},o);
+  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],tcp:[],udp:[],scripts:[],hec:false,hectoken:null,fs:{},tree:{},cwd:null,lic:'Enterprise',deploy:null,users:[],roles:[],indexes:[],peers:[],cluster:null},o);
   const LS={cur:'mgmt1',stack:[],hosts:{
     mgmt1:mk({home:'/opt/splunk',role:'Agent Management / Test Server',type:'ent',started:true,servername:'splunk-lab',mon:[{path:'/var/log/web/access.log',index:'test',st:'access_combined_wcookie'}]}),
     sh1:mk({home:'/opt/splunk',role:'Search Head',type:'sh',started:true,servername:'sh1'}),
@@ -873,6 +873,53 @@ function labMode(){
       {t:'SSH into HF1.',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
       {t:'Edit props.conf: add a SEDCMD under your sourcetype to mask values (e.g. credit-card digits), then save.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/sedcmd/i.test(t))},
     ]},
+    {id:'m5',name:'5 · Manage Agents',intro:'Centrally manage forwarders with the deployment server: make UF2 a client, stage an app, and map it with a server class.',steps:[
+      {t:'SSH into UF2.',c:'ssh uf2',test:(h,c)=>/^ssh uf2$/.test(c)},
+      {t:'Point UF2 at the deployment server (mgmt1:8089).',c:'splunk set deploy-poll mgmt1:8089',test:(h,c)=>h==='uf2'&&/^splunk set deploy-poll mgmt1:8089\b/.test(c)},
+      {t:'Return to mgmt1 (exit) and create the deployable app directory.',c:'mkdir -p /opt/splunk/etc/deployment-apps/uf_base/local',test:(h,c)=>h==='mgmt1'&&/^mkdir .*deployment-apps\/uf_base/.test(c)},
+      {t:'Create the app outputs.conf under deployment-apps (nano), then save.',c:'nano /opt/splunk/etc/deployment-apps/uf_base/local/outputs.conf',test:(h,c)=>h==='mgmt1'&&/^(nano|vi|vim) .*deployment-apps\/uf_base.*outputs\.conf$/.test(c)},
+      {t:'Define a server class mapping uf_base to forwarders in serverclass.conf (nano), then save.',c:'nano /opt/splunk/etc/system/local/serverclass.conf',state:(LS)=>Object.values(LS.hosts.mgmt1.fs||{}).some(t=>/\[serverclass:/i.test(t)&&/uf_base/i.test(t))},
+      {t:'Reload the deployment server so clients pick up the app.',c:'splunk reload deploy-server',test:(h,c)=>h==='mgmt1'&&/^splunk reload deploy-server\b/.test(c)},
+    ]},
+    {id:'users',name:'U · Users & Roles',intro:'Create a least-privilege role scoped to specific indexes, then a user assigned to it.',steps:[
+      {t:'On mgmt1, define an analyst role with srchIndexesAllowed = web firewall in authorize.conf (nano), then save.',c:'nano /opt/splunk/etc/system/local/authorize.conf',state:(LS)=>Object.values(LS.hosts.mgmt1.fs||{}).some(t=>/\[role_/i.test(t)&&/srchindexesallowed/i.test(t))},
+      {t:'Create a user assigned to that role.',c:'splunk add user analyst1 -role analyst -password Changed!123',test:(h,c)=>h==='mgmt1'&&/^splunk add user\b/.test(c)&&/-role\b/.test(c)},
+      {t:'List users to confirm the assignment.',c:'splunk list user',test:(h,c)=>h==='mgmt1'&&/^splunk list user\b/.test(c)},
+    ]},
+    {id:'lic',name:'L · License Management',intro:'Change a heavy forwarder to a forwarder license and inspect license groups.',steps:[
+      {t:'SSH into HF1.',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
+      {t:'Switch HF1 to the Forwarder license group.',c:'splunk edit licenser-groups -name Forwarder -is_active 1',test:(h,c)=>h==='hf1'&&/^splunk edit licenser-groups\b/.test(c)&&/Forwarder/i.test(c)},
+      {t:'List licenser-groups to confirm Forwarder is active.',c:'splunk list licenser-groups',test:(h,c)=>h==='hf1'&&/^splunk list licenser-groups\b/.test(c)},
+    ]},
+    {id:'idx',name:'I · Indexes & Retention',intro:'Create an index, then set age/size retention in indexes.conf.',steps:[
+      {t:'On mgmt1, create a new index named web_access.',c:'splunk add index web_access',test:(h,c)=>h==='mgmt1'&&/^splunk add index web_access\b/.test(c)},
+      {t:'Edit indexes.conf to set frozenTimePeriodInSecs and maxTotalDataSizeMB (nano), then save.',c:'nano /opt/splunk/etc/apps/search/local/indexes.conf',state:(LS)=>Object.values(LS.hosts.mgmt1.fs||{}).some(t=>/frozentimeperiodinsecs/i.test(t))},
+      {t:'List indexes to confirm web_access exists.',c:'splunk list index',test:(h,c)=>h==='mgmt1'&&/^splunk list index\b/.test(c)},
+    ]},
+    {id:'dsrch',name:'D · Distributed Search & Clustering',intro:'Add indexers as search peers on the search head, then configure indexer clustering.',steps:[
+      {t:'SSH into SH1 (the search head).',c:'ssh sh1',test:(h,c)=>/^ssh sh1$/.test(c)},
+      {t:'Add idx1 as a search peer.',c:'splunk add search-server idx1:8089 -auth admin:pass -remoteUsername admin -remotePassword pass',test:(h,c)=>h==='sh1'&&/^splunk add search-server idx1:8089\b/.test(c)},
+      {t:'List search peers to confirm.',c:'splunk list search-server',test:(h,c)=>h==='sh1'&&/^splunk list search-server\b/.test(c)},
+      {t:'On mgmt1 (exit), configure it as a cluster manager (RF 3, SF 2).',c:'splunk edit cluster-config -mode manager -replication_factor 3 -search_factor 2',test:(h,c)=>h==='mgmt1'&&/^splunk edit cluster-config\b/.test(c)&&/replication_factor/.test(c)},
+    ]},
+    {id:'apps',name:'A · Splunk Apps',intro:'Explore and manage apps: list installed apps, view app.conf, and disable one.',steps:[
+      {t:'List the installed apps under etc/apps.',c:'ls /opt/splunk/etc/apps',test:(h,c)=>/^ls .*etc\/apps$/.test(c)},
+      {t:'View the search app app.conf (display label + visibility).',c:'cat /opt/splunk/etc/apps/search/default/app.conf',test:(h,c)=>/^cat .*app\.conf$/.test(c)},
+      {t:'Disable an app to hide it from Splunk Web.',c:'splunk disable app sample_app',test:(h,c)=>/^splunk disable app\b/.test(c)},
+    ]},
+    {id:'m11',name:'11 · Fine-tune Inputs',intro:'Control event boundaries and timestamps with props.conf on the parsing tier.',steps:[
+      {t:'SSH into HF1.',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
+      {t:'Edit props.conf: set SHOULD_LINEMERGE = false and a LINE_BREAKER for clean event breaking (nano), then save.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/should_linemerge/i.test(t)&&/line_breaker/i.test(t))},
+      {t:'Add TIME_PREFIX and MAX_TIMESTAMP_LOOKAHEAD for accurate timestamps, then save.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/time_prefix/i.test(t)||/max_timestamp_lookahead/i.test(t))},
+    ]},
+    {id:'cap',name:'★★ Capstone',intro:'End-to-end: create an index, enable receiving, stand up a forwarder, and verify data flows.',steps:[
+      {t:'On mgmt1, create the app_data index.',c:'splunk add index app_data',test:(h,c)=>h==='mgmt1'&&/^splunk add index app_data\b/.test(c)},
+      {t:'Enable a receiving port on 9997.',c:'splunk enable listen 9997',test:(h,c)=>h==='mgmt1'&&/^splunk enable listen 9997\b/.test(c)},
+      {t:'SSH into UF1 and start Splunk.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+      {t:'Forward UF1 to mgmt1:9997.',c:'splunk add forward-server mgmt1:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server mgmt1:9997\b/.test(c)},
+      {t:'Monitor the access log into app_data.',c:'splunk add monitor /var/log/web/access.log -index app_data -sourcetype access_combined_wcookie',test:(h,c)=>h==='uf1'&&/^splunk add monitor\b/.test(c)&&/app_data/.test(c)},
+      {t:'On mgmt1 (exit), search to verify events arrived.',c:'splunk search "index=app_data"',test:(h,c)=>h==='mgmt1'&&/^splunk search\b/.test(c)},
+    ]},
   ];
   const ABOUT={
     m2:"Splunk reads <b>layered .conf files</b>: <code>local</code> overrides <code>default</code>, and in the global context <code>system/local</code> wins. <b>btool</b> prints the <b>merged, on-disk</b> config, and with <code>--debug</code> shows the exact file each setting came from — your #1 tool for &lsquo;where is this value coming from?&rsquo; You also saw the ports: <b>8000</b> Web, <b>8089</b> management, <b>8065</b> app server, <b>8191</b> KV store.",
@@ -886,6 +933,14 @@ function labMode(){
     m8:"A <b>scripted input</b> runs a program on a schedule and indexes whatever it writes to <b>stdout</b> — great for APIs, custom metrics, or command output. It appears as a <code>[script://&lt;path&gt;]</code> stanza with an <code>interval</code>; scripts live in an app&rsquo;s <code>bin/</code> directory.",
     m12:"A <b>source type</b> tells Splunk how to parse a format — event breaking (<code>LINE_BREAKER</code>, <code>SHOULD_LINEMERGE</code>) and timestamps (<code>TIME_PREFIX</code>, <code>TIME_FORMAT</code>). You define it as a stanza in <b>props.conf</b> named after the sourcetype, on a parsing tier (HF or indexer).",
     m13:"<b>SEDCMD</b> applies sed-style substitution to <b>raw data at index time</b> — commonly to <b>mask</b> sensitive values (card numbers, SSNs) before they are written to disk. It goes in <b>props.conf</b> under the sourcetype and only runs where parsing happens (HF or indexer), never a UF.",
+    m5:"The <b>deployment server</b> manages forwarders at scale. A forwarder becomes a <b>deployment client</b> via <code>set deploy-poll</code>. You stage apps in <code>etc/deployment-apps</code>, then a <b>server class</b> (in serverclass.conf) maps apps to groups of clients. <code>reload deploy-server</code> applies it; clients pull on phone-home. Note: settings in a client&rsquo;s <code>system/local</code> can&rsquo;t be overridden by a deployed app.",
+    users:"Access is granted through <b>roles</b>, not users directly. A role bundles <b>capabilities</b> plus index access via <code>srchIndexesAllowed</code>/<code>srchIndexesDefault</code>. Build a least-privilege custom role, then assign users to it. Default roles: <b>admin</b>, <b>power</b>, <b>user</b>.",
+    lic:"Splunk meters <b>daily indexed volume</b>. Change a host&rsquo;s license group with <code>edit licenser-groups</code> — a heavy forwarder that only forwards should use the <b>Forwarder</b> group so it doesn&rsquo;t consume Enterprise quota. The <b>license manager</b> holds the license; indexers report as <b>license peers</b>.",
+    idx:"Indexes are defined in <b>indexes.conf</b>. <code>splunk add index</code> creates one; retention is controlled by <code>frozenTimePeriodInSecs</code> (age) and <code>maxTotalDataSizeMB</code> (size) — whichever is hit first rolls the oldest data to <b>frozen</b> (deleted unless <code>coldToFrozenDir</code> is set).",
+    dsrch:"A <b>search head</b> dispatches searches to <b>search peers</b> (indexers) added with <code>add search-server</code> and merges the results. An <b>indexer cluster</b> adds resilience: the <b>cluster manager</b> coordinates peers, the <b>replication factor</b> sets total bucket copies, and the <b>search factor</b> sets searchable copies (SF ≤ RF).",
+    apps:"An <b>app</b> is a folder under <code>etc/apps</code> with its own <code>default</code>/<code>local</code> configs; <code>app.conf</code>&rsquo;s <code>[ui]</code> stanza controls the display label and visibility. Apps package inputs, knowledge objects, and dashboards — and are the unit the deployment server distributes.",
+    m11:"Parsing settings live in <b>props.conf</b> on a parsing tier. <code>LINE_BREAKER</code> + <code>SHOULD_LINEMERGE = false</code> control where events break; <code>TIME_PREFIX</code>, <code>TIME_FORMAT</code>, and <code>MAX_TIMESTAMP_LOOKAHEAD</code> control timestamp extraction — the usual fix when <code>_time</code> is wrong.",
+    cap:"The full pipeline in one flow: create an <b>index</b>, enable a <b>receiver</b>, point a <b>forwarder</b> at it with a <b>monitor</b> input, and confirm the data is searchable. This is the everyday get-data-in loop a Splunk admin runs constantly.",
   };
   let active=0;
   // ---- command engine ----
@@ -903,21 +958,30 @@ function labMode(){
       case 'start':h.started=true;return `<span class="dim">Checking prerequisites... Done</span>\nStarting splunk server daemon (splunkd)...  <span class="ok">Done</span>${a.join(' ').includes('accept-license')?'\n<span class="dim">License accepted.</span>':''}`;
       case 'restart':return h.started?`Stopping splunkd...\n<span class="ok">Done.</span>\nStarting splunkd...  <span class="ok">Done</span>`:`splunkd not running; starting...  <span class="ok">Done</span>`;
       case 'stop':h.started=false;return `Stopping splunkd...\n<span class="ok">Done.</span>`;
-      case 'enable':{if((r[0]||'')==='listen'){const p=+r[1];if(!p)return need('enable listen <port>');if(!h.listen.includes(p))h.listen.push(p);return `Listening for Splunk data on TCP port ${p}.`;}if((r[0]||'')==='boot-start')return `<span class="ok">Init script installed.</span>`;return `<span class="err">Unknown 'enable' target.</span> Try: splunk enable listen <port>`;}
-      case 'disable':{if((r[0]||'')==='listen'){const p=+r[1];h.listen=h.listen.filter(x=>x!==p);return `Disabled listening on TCP port ${p}.`;}return `<span class="err">Unknown 'disable' target.</span>`;}
+      case 'enable':{if((r[0]||'')==='listen'){const p=+r[1];if(!p)return need('enable listen <port>');if(!h.listen.includes(p))h.listen.push(p);return `Listening for Splunk data on TCP port ${p}.`;}if((r[0]||'')==='boot-start')return `<span class="ok">Init script installed.</span>`;if((r[0]||'')==='app')return `<span class="ok">App '${esc(r[1]||'')}' enabled.</span>`;return `<span class="err">Unknown 'enable' target.</span> Try: splunk enable listen <port> | app <name>`;}
+      case 'disable':{if((r[0]||'')==='listen'){const p=+r[1];h.listen=h.listen.filter(x=>x!==p);return `Disabled listening on TCP port ${p}.`;}if((r[0]||'')==='app')return `<span class="ok">App '${esc(r[1]||'')}' disabled.</span>`;return `<span class="err">Unknown 'disable' target.</span> Try: splunk disable listen <port> | app <name>`;}
       case 'add':{const w=(r[0]||'').toLowerCase(),b=r.slice(1);
         if(w==='forward-server'){if(!b[0])return need('add forward-server <host>:<port>');if(!h.fwd.includes(b[0]))h.fwd.push(b[0]);return `Added forwarding to: ${esc(b[0])}.`;}
         if(w==='monitor'){if(!b[0])return need('add monitor <path> [-index x] [-sourcetype y]');const gi=b.indexOf('-index'),gs=b.indexOf('-sourcetype');h.mon.push({path:b[0],index:gi>-1?b[gi+1]:'default',st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added monitor of '${esc(b[0])}'.</span>`;}
         if(w==='tcp'){if(!b[0])return need('add tcp <port> [-sourcetype x]');const gs=b.indexOf('-sourcetype');h.tcp.push({port:b[0],st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added TCP input on port ${esc(b[0])}.</span>`;}
         if(w==='udp'){if(!b[0])return need('add udp <port> [-sourcetype x]');const gs=b.indexOf('-sourcetype');h.udp.push({port:b[0],st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added UDP input on port ${esc(b[0])}.</span>`;}
         if(w==='exec'){if(!b[0])return need('add exec <script> [-interval n] [-index x]');const ii=b.indexOf('-interval'),xi=b.indexOf('-index');h.scripts.push({path:b[0],interval:ii>-1?b[ii+1]:60,index:xi>-1?b[xi+1]:'default',st:'auto'});return `<span class="ok">Added scripted input '${esc(b[0])}'.</span>`;}
-        return `<span class="err">Unknown 'add' object '${esc(r[0]||'')}'.</span> Try: forward-server | monitor | tcp | udp | exec`;}
+        if(w==='user'){if(!b[0])return need('add user <name> -role <role> -password <pw>');const ri=b.indexOf('-role');h.users.push({name:b[0],role:ri>-1?b[ri+1]:'user'});return `<span class="ok">User '${esc(b[0])}' created${ri>-1?` with role ${esc(b[ri+1])}`:''}.</span>`;}
+        if(w==='role'){if(!b[0])return need('add role <name> -srchIndexesAllowed <idx>');const si=b.indexOf('-srchIndexesAllowed');h.roles.push({name:b[0],idx:si>-1?b[si+1]:'*'});return `<span class="ok">Role '${esc(b[0])}' created.</span>`;}
+        if(w==='index'){if(!b[0])return need('add index <name>');if(!h.indexes.includes(b[0]))h.indexes.push(b[0]);h.tree[h.home+'/etc/apps/search/local/indexes.conf']={t:'f'};return `<span class="ok">Index '${esc(b[0])}' added.</span> <span class="dim">(written to indexes.conf)</span>`;}
+        if(w==='search-server'){if(!b[0])return need('add search-server <host>:<port> -auth <u>:<p> -remoteUsername <u> -remotePassword <p>');if(!h.peers.includes(b[0]))h.peers.push(b[0]);return `<span class="ok">Peer added: ${esc(b[0])}.</span> Restart the search head to apply.`;}
+        return `<span class="err">Unknown 'add' object '${esc(r[0]||'')}'.</span> Try: forward-server | monitor | tcp | udp | exec | user | role | index | search-server`;}
       case 'http-event-collector':case 'hec':{const w=(r[0]||'').toLowerCase();if(w==='enable'){h.hec=true;return `<span class="ok">HTTP Event Collector enabled</span> (listening on 8088).`;}if(w==='create'){if(!r[1])return need('http-event-collector create <name>');h.hec=true;h.hectoken='11111111-2222-3333-4444-555555555555';return `<span class="ok">HEC token created for '${esc(r[1])}'.</span>\n  token: ${h.hectoken}`;}if(w==='list')return h.hec?`http: enabled\n  token: ${h.hectoken||'(none created yet)'}`:`http: <span class="warn">disabled</span> — run: splunk http-event-collector enable`;return `<span class="err">Unknown HEC action.</span> Try: enable | create <name> | list`;}
       case 'remove':{if((r[0]||'').toLowerCase()==='forward-server'){const t=r[1];const before=h.fwd.length;h.fwd=h.fwd.filter(x=>x!==t);return before>h.fwd.length?`Removed forwarding to: ${esc(t)}.`:`<span class="warn">${esc(t||'')} was not a configured forward-server.</span>`;}return `<span class="err">Unknown 'remove' object.</span>`;}
       case 'list':{const w=(r[0]||'').toLowerCase();
         if(w==='forward-server'||w==='forward-servers')return h.fwd.length?`Active forwards:\n${h.fwd.map(f=>'    '+esc(f)+' <span class="ok">(active)</span>').join('\n')}\nConfigured but inactive forwards:\n    None`:`Active forwards:\n    None\nConfigured but inactive forwards:\n    None`;
         if(w==='monitor'||w==='inputstatus'){const extra=h.mon.map(m=>'    '+m.path).join('\n');return `Monitored Directories:\n    ${h.home}/var/log/splunk\nMonitored Files:\n    ${h.home}/etc/splunk.version${extra?'\n'+extra:''}`;}
-        if(w==='licenser-groups'||w==='licenses')return `Enterprise\n  is_active:${h.lic==='Enterprise'?1:0}\nForwarder\n  is_active:${h.lic==='Forwarder'?1:0}\nFree\n  is_active:0`;
+        if(w==='licenser-groups')return `Enterprise\n  is_active:${h.lic==='Enterprise'?1:0}\nForwarder\n  is_active:${h.lic==='Forwarder'?1:0}\nFree\n  is_active:0`;
+        if(w==='licenses'||w==='license')return `Splunk Enterprise (NFR) — group: Enterprise, status: VALID, quota: 50 GB/day, expires: end of CY2026`;
+        if(w==='index'||w==='indexes')return ['main','_internal','_audit','_introspection','history','summary'].concat(h.indexes).join('\n');
+        if(w==='user'||w==='users')return (h.users.length?h.users:[{name:'admin',role:'admin'}]).map(u=>`${esc(u.name)} : roles = ${esc(u.role)}`).join('\n');
+        if(w==='role'||w==='roles')return ['admin','power','user'].concat(h.roles.map(x=>x.name)).join('\n');
+        if(w==='search-server'||w==='search-servers')return h.peers.length?'Search peers:\n'+h.peers.map(p=>'    '+esc(p)+' <span class="ok">(Up)</span>').join('\n'):'No search peers configured.';
         return `<span class="err">Unknown object '${esc(r[0]||'')}'.</span> Try: splunk list forward-server|monitor|licenser-groups`;}
       case 'btool':{const conf=r[0];if(conf==='check')return `<span class="ok">Configuration files validated — no errors found.</span>`;if(!conf)return need('btool <conf> list [--debug]');const dbg=r.includes('--debug');const sp=(f)=>dbg?`<span class="dim">${h.home}/etc/${f}</span> `:'';
         if(conf==='inputs'){let o='';h.mon.forEach(m=>{o+=`${sp('apps/search/local/inputs.conf')}[monitor://${m.path}]\n${sp('apps/search/local/inputs.conf')}disabled = false\n${sp('system/default/inputs.conf')}_rcvbuf = 1572864\n${sp('system/local/inputs.conf')}host = ${h.servername}\n${sp('apps/search/local/inputs.conf')}index = ${m.index}\n${sp('apps/search/local/inputs.conf')}sourcetype = ${m.st}\n`;});h.listen.forEach(p=>{o+=`${sp('apps/search/local/inputs.conf')}[splunktcp://${p}]\n${sp('apps/search/local/inputs.conf')}connection_host = ip\n`;});return o||'<span class="dim"># no matching inputs</span>';}
@@ -926,7 +990,10 @@ function labMode(){
         return `<span class="dim"># merged ${esc(conf)}.conf (add --debug for source files)</span>`;}
       case 'show':{const w=(r[0]||'').toLowerCase();const map={'web-port':'Web port: 8000','splunkd-port':'Splunkd port: 8089','appserver-ports':'Application server ports on loopback interface: 8065','kvstore-port':'KV Store port: 8191','servername':'Server name: '+h.servername,'default-hostname':'Default hostname for data inputs: '+h.servername};if(map[w])return map[w];if(w==='config'){return splunk(['btool','server','list','general','--debug']);}return `<span class="dim">show ${esc(r[0]||'')} — not simulated.</span>`;}
       case 'set':{if((r[0]||'')==='deploy-poll'){h.deploy=r[1]||'mgmt1:8089';return `Configuration updated.`;}return `<span class="ok">Setting updated.</span>`;}
-      case 'edit':{if((r[0]||'')==='licenser-groups'){if(/Forwarder/i.test(a.join(' '))){h.lic='Forwarder';return `The licenser-groups object has been edited.\n<span class="warn">You need to restart splunkd for changes to take effect.</span>`;}return `The licenser-groups object has been edited.`;}return `<span class="ok">Edited.</span>`;}
+      case 'edit':{if((r[0]||'')==='licenser-groups'){if(/Forwarder/i.test(a.join(' '))){h.lic='Forwarder';return `The licenser-groups object has been edited.\n<span class="warn">You need to restart splunkd for changes to take effect.</span>`;}return `The licenser-groups object has been edited.`;}if((r[0]||'')==='cluster-config'){const gm=a.indexOf('-mode'),gr=a.indexOf('-replication_factor'),gs=a.indexOf('-search_factor');h.cluster={mode:gm>-1?a[gm+1]:'manager',rf:gr>-1?a[gr+1]:3,sf:gs>-1?a[gs+1]:2};return `Cluster config edited: mode=${esc(h.cluster.mode)}, replication_factor=${esc(''+h.cluster.rf)}, search_factor=${esc(''+h.cluster.sf)}.\n<span class="warn">Restart required.</span>`;}return `<span class="ok">Edited.</span>`;}
+      case 'install':return (r[0]==='app')?`<span class="ok">App installed from ${esc(r[1]||'<file>')}.</span> Restart to load.`:`<span class="err">Unknown install target.</span> Try: splunk install app <file>`;
+      case 'display':return (r[0]==='app')?`${esc(r[1]||'')}\n  ENABLED : 1\n  VISIBLE : 1`:`<span class="dim">display ${esc(r[0]||'')} — not simulated.</span>`;
+      case 'remove-app':case 'uninstall':return `<span class="ok">App removed.</span>`;
       case 'reload':return (r[0]==='deploy-server')?`Reloading serverclass(es)...  <span class="ok">Done.</span>`:`<span class="err">Nothing to reload for '${esc(r[0]||'')}'.</span>`;
       case 'search':{const q=a.slice(1).join(' ').replace(/^['"]|['"]$/g,'');if(!q)return need("search '<SPL>'");if(/index=_internal/.test(q)&&/tstats|splunk_server/.test(q))return `<span class="dim"># ${esc(q)}</span>\nsplunk_server   count\nidx1            48213\nidx2            47190\nsh1             9922`;return `<span class="dim"># ${esc(q)}</span>\n_time                 host       source                        sourcetype                 status\n2027-05-25 10:30:02   ${h.servername.padEnd(9)}  /var/log/web/access.log      access_combined_wcookie    200\n2027-05-25 10:30:04   ${h.servername.padEnd(9)}  /var/log/web/access.log      access_combined_wcookie    404\n<span class="dim">(showing 2 of 1,842 matching events — simulated)</span>`;}
       default:return `<span class="err">Command '${esc(s)}' not found on the splunk CLI.</span> Type <span class="cy">splunk help</span>.`;
@@ -946,6 +1013,8 @@ function labMode(){
     if(cmd==='grep'){const pat=parts[1],f=parts[2];if(!pat||!f)return `<span class="err">usage: grep &lt;pattern&gt; &lt;file&gt;</span>`;const c=fileContent(f)||'';let re;try{re=new RegExp(pat,'i');}catch(e){re=new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');}const hits=c.split('\n').filter(l=>re.test(l));return hits.length?esc(hits.join('\n')):'';}
     if(cmd==='wc'){const f=parts[parts.length-1];const c=fileContent(f);if(c===''||c===null||c===undefined)return `<span class="err">wc: ${esc(f||'')}: No such file</span>`;const n=c.replace(/\n$/,'').split('\n').filter(x=>x!=='').length;return `  ${n}  ${esc(f)}`;}
     if(cmd==='rm'){const f=parts[1]||'';const ap=absPath(f);if(/outputs\.conf$/.test(ap)){H().fwd=[];delete H().fs[ap];delete H().tree[ap];return '';}if(H().tree[ap]){delete H().tree[ap];delete H().fs[ap];return '';}return `<span class="err">rm: ${esc(f)}: No such file or directory</span>`;}
+    if(cmd==='mkdir'){const p=parts[parts.length-1];if(!p||p[0]==='-')return `<span class="err">usage: mkdir [-p] &lt;dir&gt;</span>`;const ap=absPath(p);const segs=ap.split('/').filter(Boolean);let cur='';segs.forEach(s=>{cur+='/'+s;if(!H().tree[cur])H().tree[cur]={t:'d'};});return '';}
+    if(cmd==='touch'){const p=parts[parts.length-1];if(!p)return `<span class="err">usage: touch &lt;file&gt;</span>`;const ap=absPath(p);if(!H().tree[ap])H().tree[ap]={t:'f',c:''};return '';}
     if(cmd==='ls'){const a2=parts.slice(1).filter(x=>x[0]!=='-');const long=/(^|\s)-l/.test(t);const dir=resolve(a2[0]||'.');if(H().tree[dir]&&H().tree[dir].t==='f')return esc(a2[0]);if(!isDir(dir))return `<span class="err">ls: ${esc(a2[0]||'')}: No such file or directory</span>`;const ks=children(dir);if(!ks.length)return '';return ks.map(k=>{const full=(dir==='/'?'':dir)+'/'+k;const d=isDir(full);return d?`<span class="cy">${esc(k)}/</span>`:esc(k);}).join(long?'\n':'   ');}
     if(cmd==='pwd')return H().cwd;
     if(cmd==='cd'){const tgt=resolve(parts[1]||'~');if(isDir(tgt)){H().cwd=tgt;return '';}return `<span class="err">cd: ${esc(parts[1]||'')}: Not a directory</span>`;}
@@ -955,7 +1024,7 @@ function labMode(){
     return `<span class="err">${esc(cmd)}: command not found.</span> Try <span class="cy">ls</span>, <span class="cy">cd</span>, <span class="cy">cat</span>, <span class="cy">nano</span>, <span class="cy">ssh</span>, or <span class="cy">splunk help</span>.`;
   }
   // ---- view ----
-  const v=$(`<div class="view">${topBar()}<button class="back" id="lback">← Back</button>
+  const v=$(`<div class="view">${topBar()}<button class="back" id="lback">← Back</button><button class="iconbtn" id="lreset" style="margin-left:8px" title="Reset the lab to a clean state">↺ Reset lab</button>
     <div class="brand" style="margin-bottom:10px"><div class="logo">🧪</div><h1>Guided Lab</h1><p>Splunk Enterprise Data Administration — a safe, simulated lab environment</p></div>
     <div class="lablayout">
       <div class="lab-main">
@@ -969,11 +1038,12 @@ function labMode(){
     </div></div>`);
   wireTop(v);
   v.querySelector('#lback').onclick=examInfo;
+  v.querySelector('#lreset').onclick=()=>{if(confirm('Reset the lab environment to a clean state? Your command history and progress will be cleared.'))labMode();};
   const body=v.querySelector('#labbody'), side=v.querySelector('#labside'), title=v.querySelector('#labtitle');
   const line=(html='')=>{const d=document.createElement('div');d.className='term-line';d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;};
   const hist=[]; let hi=-1;
-  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','search','http-event-collector','help'];
-  const CMDS=['ls','cd','pwd','cat','more','head','tail','grep','wc','echo','whoami','clear','ssh','exit','nano','vi','vim','rm','splunk','help'];
+  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','search','install','display','http-event-collector','help'];
+  const CMDS=['ls','cd','pwd','cat','more','head','tail','grep','wc','echo','whoami','clear','mkdir','touch','ssh','exit','nano','vi','vim','rm','splunk','help'];
   function finishTok(inp,pre,pfx,list){const p=pfx.toLowerCase();const hit=list.filter(x=>x.toLowerCase().startsWith(p));if(!hit.length)return;if(hit.length===1){inp.value=pre+hit[0]+' ';}else{let cp=hit[0];hit.forEach(x=>{while(cp&&!x.toLowerCase().startsWith(cp.toLowerCase()))cp=cp.slice(0,-1);});inp.value=pre+cp;if(cp.length<=pfx.length)line('<span class="dim">'+hit.join('   ')+'</span>');}}
   function completePath(inp,before,partial){let dir,pfx,dpref;if(partial.includes('/')){const i=partial.lastIndexOf('/');dpref=partial.slice(0,i+1);pfx=partial.slice(i+1);dir=resolve(dpref.replace(/\/$/,'')||'/');}else{dir=H().cwd;pfx=partial;dpref='';}if(!isDir(dir))return;const kids=children(dir).filter(k=>k.toLowerCase().startsWith(pfx.toLowerCase()));if(!kids.length)return;if(kids.length===1){const full=(dir==='/'?'':dir)+'/'+kids[0];inp.value=before+dpref+kids[0]+(isDir(full)?'/':' ');}else{let cp=kids[0];kids.forEach(k=>{while(cp&&!k.toLowerCase().startsWith(cp.toLowerCase()))cp=cp.slice(0,-1);});inp.value=before+dpref+cp;if(cp.length<=pfx.length)line('<span class="dim">'+kids.map(k=>{const full=(dir==='/'?'':dir)+'/'+k;return isDir(full)?k+'/':k;}).join('   ')+'</span>');}}
   function complete(inp){const val=inp.value;const mSub=val.match(/^(\s*splunk\s+)(\S*)$/);if(mSub){finishTok(inp,mSub[1],mSub[2],SUBS);return;}const toks=val.split(/\s+/);if(toks.length===1&&!/\s$/.test(val)){finishTok(inp,val.slice(0,val.length-toks[0].length),toks[0],CMDS);return;}if(/^(cat|more|head|tail|nano|vi|vim|cd|ls|grep|wc|rm)$/.test(toks[0])){const last=/\s$/.test(val)?'':toks[toks.length-1];completePath(inp,val.slice(0,val.length-last.length),last);}}
