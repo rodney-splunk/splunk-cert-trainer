@@ -307,6 +307,16 @@
   .lab-main{flex:1;min-width:0}
   .lab-side{width:300px;flex-shrink:0}
   @media(max-width:900px){.lablayout{flex-direction:column}.lab-side{width:100%;order:2}}
+  /* wider Guided Lab layout (breaks out of the 820px column) */
+  .labwide{width:min(1200px,96vw);position:relative;left:50%;transform:translateX(-50%)}
+  .labwide .lab-side{width:370px}
+  .labwide .term-body{height:min(72vh,680px);font-size:.9rem}
+  .labwide .term-title{font-size:.82rem}
+  .labwide .lab-steps{max-height:min(62vh,600px)}
+  .labwide .lab-step{font-size:.88rem;padding:11px 14px}
+  .labwide .lab-card h4{font-size:.9rem}
+  .labwide .term-hint{font-size:.84rem}
+  @media(max-width:900px){.labwide{width:auto;left:auto;transform:none}.labwide .lab-side{width:100%}.labwide .term-body{height:min(58vh,440px)}}
   .lab-mods{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
   .lab-mod{background:var(--card);border:1px solid var(--hair);color:var(--text);border-radius:10px;padding:7px 11px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;box-shadow:none}
   .lab-mod.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -1024,7 +1034,7 @@ function labMode(){
     return `<span class="err">${esc(cmd)}: command not found.</span> Try <span class="cy">ls</span>, <span class="cy">cd</span>, <span class="cy">cat</span>, <span class="cy">nano</span>, <span class="cy">ssh</span>, or <span class="cy">splunk help</span>.`;
   }
   // ---- view ----
-  const v=$(`<div class="view">${topBar()}<button class="back" id="lback">← Back</button><button class="iconbtn" id="lreset" style="margin-left:8px" title="Reset the lab to a clean state">↺ Reset lab</button>
+  const v=$(`<div class="view labwide">${topBar()}<button class="back" id="lback">← Back</button><button class="iconbtn" id="lreset" style="margin-left:8px" title="Reset the lab to a clean state">↺ Reset lab</button>
     <div class="brand" style="margin-bottom:10px"><div class="logo">🧪</div><h1>Guided Lab</h1><p>Splunk Enterprise Data Administration — a safe, simulated lab environment</p></div>
     <div class="lablayout">
       <div class="lab-main">
