@@ -360,6 +360,8 @@
   .ctable{width:100%;border-collapse:collapse;margin:10px 0;font-size:.83rem}
   .ctable th,.ctable td{border:1px solid var(--hair);padding:7px 10px;text-align:left;vertical-align:top}
   .ctable th{background:var(--card-solid);font-weight:700}
+  .cquiz{margin-top:14px;font-size:.82rem;padding:9px 16px}
+  .cq-badge{display:inline-flex;align-items:center;gap:5px;margin-left:8px;font-size:.68rem;font-weight:700;padding:2px 9px;border-radius:20px;background:rgba(51,209,122,.16);color:var(--green);border:1px solid rgba(51,209,122,.4)}
 </style>
 </head>
 <body>
@@ -380,7 +382,7 @@ const curOrder=()=>{const b=curBank();if(CAT_ORDERS[b])return CAT_ORDERS[b];cons
 
 /* ============ persistent store ============ */
 const SK='splunk-trainer-v2';
-const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',sideHidden:false,resume:null};
+const DEFAULTS={v:2,xpTotal:0,passes:0,attempts:0,bestScore:0,catMastery:{},missedIds:[],seenIds:[],flaggedIds:[],notes:{},srs:{},examDates:{},badges:[],dailyStreak:0,lastStudyDate:'',theme:'auto',sound:true,quickExam:'power',sideHidden:false,conceptMastery:{},resume:null};
 function loadStore(){ try{ const raw=localStorage.getItem(SK); if(raw) return Object.assign({},DEFAULTS,JSON.parse(raw)); }catch(e){} return Object.assign({},DEFAULTS); }
 function saveStore(){ try{ localStorage.setItem(SK,JSON.stringify(store)); }catch(e){} }
 const store=loadStore();
@@ -1166,15 +1168,93 @@ function conceptsScreen(){
      <p><b>Search-time</b> (applied when you search): most field extractions, field aliases, calculated fields, lookups, event types, tags. Flexible — change any time, no re-index.</p>`,
      gotcha:`<b>Prefer search-time.</b> Index-time extractions bloat the index and can&rsquo;t be applied retroactively to already-indexed data.`,doc:D+'Knowledge/Aboutfields'},
   ];
-  const cards=CONCEPTS.map(c=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span><span class="ctag">${c.tag}</span></summary>
-    <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div></details>`).join('');
+  const CQUIZ=[
+    [{q:"The same setting is in <code>$SPLUNK_HOME/etc/system/local</code> and in an app's <code>default</code> directory. In the global context, which wins?",o:["The app's default value","The system/local value","They are merged and averaged","Whichever was edited last"],a:[1],e:"In the global context, <b>system/local</b> has the highest precedence, so it wins over any app default."},
+     {q:"You edited a setting in an app's <code>default/</code> directory and it reverted after an upgrade. Why?",o:["default/ is overwritten on upgrade — edits belong in local/","You must restart twice","default/ is read-only to Splunk","The setting moved to another conf file"],a:[0],e:"Never edit <code>default/</code> — upgrades replace it. Put custom settings in <code>local/</code>."},
+     {q:"Within one app's config, which directory always overrides the other?",o:["default over local","local over default","They never conflict","Alphabetical order decides"],a:[1],e:"<b>local</b> always overrides <b>default</b> in the same context — the one precedence rule that's always true."}],
+    [{q:"An event matches event type A (priority 2) and B (priority 8). Whose color displays?",o:["B — higher number wins","A — lower number is higher priority","Neither — colors don't apply","Both colors blend"],a:[1],e:"Lower number = higher priority, so priority <b>2 beats 8</b>. Only one color shows per event."},
+     {q:"What is the default event type priority?",o:["1","5","10","0"],a:[1],e:"The default priority is <b>5</b>, the middle of the 1–10 range."},
+     {q:"Which statement about event type priority is TRUE?",o:["Priority 10 outranks priority 1","A lower number means higher priority","Priority controls indexing speed","Every matching event type shows its color"],a:[1],e:"<b>Lower number = higher priority.</b> It affects listing order and which single color shows."}],
+    [{q:"You edited inputs.conf but haven't restarted. What does <code>splunk btool inputs list</code> show?",o:["The value loaded in memory","The merged on-disk value (your edit)","Nothing until restart","An error"],a:[1],e:"btool reads the <b>merged on-disk</b> config, so it shows your edit — but Splunk won't use it until you restart."},
+     {q:"Which command reveals the source file of each effective setting?",o:["splunk btool <conf> list --debug","splunk show config","splunk diag","splunk list settings"],a:[0],e:"<code>--debug</code> prefixes every line with its source file — the fastest way to trace precedence."},
+     {q:"How do you validate config files for errors without restarting?",o:["splunk validate","splunk btool check","splunk lint","splunk test-conf"],a:[1],e:"<code>splunk btool check</code> validates the merged configuration."}],
+    [{q:"Which stanza turns an instance into a receiver for forwarders on 9997?",o:["[monitor://9997]","[splunktcp://9997]","[tcpout://9997]","[receive://9997]"],a:[1],e:"<code>[splunktcp://9997]</code> — created by <code>splunk enable listen 9997</code>."},
+     {q:"On a universal forwarder, which file says WHERE to send data?",o:["inputs.conf","outputs.conf","props.conf","indexes.conf"],a:[1],e:"<b>outputs.conf</b> defines the receiving indexers; inputs.conf defines what to collect."},
+     {q:"Which inputs.conf stanza continuously watches a file/directory?",o:["[monitor://<path>]","[batch://<path>]","[script://<path>]","[perfmon://<path>]"],a:[0],e:"<code>[monitor://...]</code> continuously watches and indexes new data."}],
+    [{q:"A heavy forwarder only forwards data. Which license group avoids using Enterprise quota?",o:["Enterprise","Forwarder","Free","Trial"],a:[1],e:"Set a forward-only HF to the <b>Forwarder</b> group so it doesn't count against Enterprise volume."},
+     {q:"What is the Free license daily indexing limit?",o:["100 MB/day","500 MB/day","5 GB/day","Unlimited"],a:[1],e:"<b>500 MB/day</b>, and it disables auth, alerting, and distributed search."},
+     {q:"Splunk license usage is measured by...",o:["Total data stored on disk","Data indexed per day","Number of searches","Number of forwarders"],a:[1],e:"License is metered on <b>volume indexed per day</b>."}],
+    [{q:"You need to route unwanted events to nullQueue BEFORE indexing. Which forwarder can?",o:["Universal forwarder","Heavy forwarder","Neither — only the indexer","Deployment server"],a:[1],e:"A <b>heavy forwarder</b> parses, so it can filter/route before sending. A UF doesn't parse."},
+     {q:"Which forwarder is a lightweight agent that forwards mostly unparsed data?",o:["Heavy forwarder","Universal forwarder","Search head","Indexer"],a:[1],e:"The <b>universal forwarder</b> — small footprint, no parsing, no web UI."},
+     {q:"On which components does parsing occur?",o:["Universal forwarder only","Heavy forwarder and indexer","Search head only","Deployment server"],a:[1],e:"Parsing happens on the <b>heavy forwarder</b> and the <b>indexer</b>, never a UF."}],
+    [{q:"Which bucket state is the only one being actively written to?",o:["warm","hot","cold","frozen"],a:[1],e:"Only <b>hot</b> buckets are writable; warm/cold are read-only searchable; frozen leaves the index."},
+     {q:"By default, what happens when a bucket rolls to frozen?",o:["Compressed and kept forever","Deleted (unless coldToFrozenDir is set)","Moved back to hot","Re-indexed"],a:[1],e:"Frozen data is <b>deleted by default</b>; set <code>coldToFrozenDir</code> to archive."},
+     {q:"Which indexes.conf setting freezes data by AGE?",o:["maxTotalDataSizeMB","frozenTimePeriodInSecs","homePath","maxHotBuckets"],a:[1],e:"<code>frozenTimePeriodInSecs</code> freezes by age; <code>maxTotalDataSizeMB</code> by size."}],
+    [{q:"Which config makes a forwarder poll a deployment server?",o:["serverclass.conf","deploymentclient.conf","outputs.conf","web.conf"],a:[1],e:"<code>deploymentclient.conf</code> (via <code>splunk set deploy-poll</code>) points a client at its server."},
+     {q:"On a deployment server, what groups clients and maps them to apps?",o:["A server class","An index","A search head cluster","A license pool"],a:[0],e:"A <b>server class</b> (serverclass.conf) associates client groups with deployment apps."},
+     {q:"Where do deployable apps live on the deployment server?",o:["etc/apps","etc/deployment-apps","var/run","etc/system/local"],a:[1],e:"Staged apps go in <code>$SPLUNK_HOME/etc/deployment-apps</code>."}],
+    [{q:"Best practice: where should most field extractions be done?",o:["Index time","Search time","On the universal forwarder","In the license manager"],a:[1],e:"Prefer <b>search-time</b> — flexible and changeable without re-indexing."},
+     {q:"Which of these is an INDEX-time field?",o:["A field alias","A lookup output field","sourcetype","A calculated (eval) field"],a:[2],e:"<b>sourcetype</b> (like host, source, _time) is index-time. Aliases, lookups, calculated fields are search-time."},
+     {q:"To change a field extraction WITHOUT re-indexing, it must be...",o:["Index-time","Search-time","Done on the forwarder","Stored in the fishbucket"],a:[1],e:"Only <b>search-time</b> extractions can be changed retroactively."}],
+  ];
+  const mastered=t=>store.conceptMastery&&store.conceptMastery[t];
+  const cards=CONCEPTS.map((c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
+    <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div>${CQUIZ[ci]&&CQUIZ[ci].length?`<div><button class="cquiz" data-i="${ci}">🎯 Test your mastery (${CQUIZ[ci].length} questions)</button></div>`:''}</div></details>`).join('');
+  const doneCount=CONCEPTS.filter(c=>mastered(c.title)).length;
   const v=$(`<div class="view">${topBar()}<button class="back" id="cback">← Back</button>
-    <div class="brand" style="margin-bottom:12px"><div class="logo">📗</div><h1>Concept Mastery</h1><p>The topics that trip everyone up — expanded until they click</p></div>
-    <p style="color:var(--muted);font-size:.84rem;margin:-4px 0 14px">Tap a topic to expand. Each has the concept, a worked example, the classic gotcha, and a link to the docs.</p>
+    <div class="brand" style="margin-bottom:12px"><div class="logo">📗</div><h1>Concept Mastery</h1><p>Read each explainer, then quiz yourself to prove you&rsquo;ve got it</p></div>
+    <p style="color:var(--muted);font-size:.84rem;margin:-4px 0 12px">Mastered <b style="color:var(--green)">${doneCount}</b> / ${CONCEPTS.length} concepts. Expand a topic for the explainer + worked example, then hit <b>Test your mastery</b> (score 80%+ to earn 🏅).</p>
+    <button id="quizall" style="margin:0 0 16px">🎯 Quiz me on all ${CONCEPTS.length} concepts</button>
     ${cards}</div>`);
   wireTop(v);
   v.querySelector('#cback').onclick=examInfo;
+  v.querySelector('#quizall').onclick=()=>{const all=[];CQUIZ.forEach((arr,i)=>arr.forEach(q=>all.push(Object.assign({},q))));for(let i=all.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=all[i];all[i]=all[j];all[j]=t;}conceptQuiz(all,'All Concepts',null);};
+  v.querySelectorAll('.cquiz').forEach(b=>{b.onclick=(e)=>{e.stopPropagation();e.preventDefault();const i=+b.dataset.i;conceptQuiz(CQUIZ[i].map(q=>Object.assign({},q)),CONCEPTS[i].title,CONCEPTS[i].title);};});
   show(v);
+}
+function conceptQuiz(qs,title,masterKey){
+  currentRender=()=>conceptQuiz(qs,title,masterKey); S.onKey=null; try{clearTimer();}catch(e){}
+  let qi=0,score=0;
+  function q(){
+    const cur=qs[qi],multi=cur.a.length>1;
+    const opts=cur.o.map((o,i)=>`<label class="opt" data-i="${i}"><input type="${multi?'checkbox':'radio'}" name="o" value="${i}"><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
+    const v=$(`<div class="view">${topBar()}<button class="back" id="cqb">← Concepts</button>
+      <div class="glass qcard"><div class="qcat">🎯 ${title} · ${qi+1} / ${qs.length}</div>
+        <p class="qtext">${cur.q}</p>${multi?`<p class="multi">✔ Select all that apply</p>`:''}
+        <div class="opts" id="opts">${opts}</div><div id="ex"></div>
+        <div class="qnav"><button id="submit">Submit answer</button><button id="next" class="ghost" style="display:none">${qi===qs.length-1?'See score →':'Next question →'}</button></div>
+      </div></div>`);
+    wireTop(v);
+    v.querySelector('#cqb').onclick=conceptsScreen;
+    v.querySelectorAll('#opts .opt').forEach(o=>o.onclick=(e)=>{if(e.target.tagName==='INPUT')return;const inp=o.querySelector('input');if(multi)inp.checked=!inp.checked;else{v.querySelectorAll('#opts input').forEach(x=>x.checked=false);inp.checked=true;}});
+    let answered=false;
+    const grade=()=>{if(answered)return;const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);if(!picked.length)return;answered=true;
+      const ok=cur.a.slice().sort().join(',')===picked.slice().sort().join(',');if(ok)score++;
+      v.querySelectorAll('#opts .opt').forEach(o=>{const i=+o.dataset.i;o.classList.add('disabled');o.querySelector('input').disabled=true;if(cur.a.includes(i))o.classList.add('correct');else if(picked.includes(i))o.classList.add('wrong');});
+      v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v">${ok?'✓ Correct':'✗ Not quite'}</div>${cur.e}</div>`;
+      v.querySelector('#submit').style.display='none';const nx=v.querySelector('#next');nx.style.display='inline-block';nx.focus();};
+    v.querySelector('#submit').onclick=grade;
+    v.querySelector('#next').onclick=()=>{if(qi<qs.length-1){qi++;q();}else scoreScreen();};
+    S.onKey=(e)=>{if(e.key>='1'&&e.key<=String(cur.o.length)){const i=+e.key-1;const inp=v.querySelector(`.opt[data-i="${i}"] input`);if(inp&&!inp.disabled){if(multi)inp.checked=!inp.checked;else{v.querySelectorAll('#opts input').forEach(x=>x.checked=false);inp.checked=true;}}e.preventDefault();}else if(e.key==='Enter'){if(!answered)grade();else v.querySelector('#next').click();e.preventDefault();}};
+    show(v);
+  }
+  function scoreScreen(){
+    const pct=Math.round(score/qs.length*100),win=pct>=80;
+    if(win&&masterKey){store.conceptMastery=store.conceptMastery||{};store.conceptMastery[masterKey]=true;saveStore();if(win)try{confetti();}catch(e){}}
+    const v=$(`<div class="view">${topBar()}<button class="back" id="cqb2">← Concepts</button>
+      <div class="brand" style="margin-bottom:10px"><div class="logo">${win?'🏅':'📗'}</div><h1>${pct}%</h1><p>${title}</p></div>
+      <div class="glass" style="padding:20px;text-align:center">
+        <div style="font-size:1.15rem;font-weight:850;color:${win?'var(--green)':'var(--amber)'}">${win?'Mastered! 🎉':'Almost — review and retry'}</div>
+        <p style="color:var(--muted);margin-top:6px">${score} / ${qs.length} correct</p>
+        <div style="display:flex;gap:9px;justify-content:center;margin-top:16px;flex-wrap:wrap"><button id="retry">↻ Retry</button><button id="toc" class="ghost">Back to concepts</button></div>
+      </div></div>`);
+    wireTop(v);
+    v.querySelector('#cqb2').onclick=conceptsScreen;
+    v.querySelector('#retry').onclick=()=>{qi=0;score=0;q();};
+    v.querySelector('#toc').onclick=conceptsScreen;
+    show(v);
+  }
+  q();
 }
 
 /* ============ QUIZ engine ============ */
