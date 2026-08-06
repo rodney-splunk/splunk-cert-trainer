@@ -322,6 +322,17 @@
   .lab-cmd{display:inline-block;margin-top:4px;font-family:ui-monospace,Menlo,monospace;font-size:.78em;color:var(--accent2);background:var(--card-solid);border:1px solid var(--hair);border-radius:6px;padding:1px 6px;cursor:pointer}
   .lab-cmd:hover{border-color:var(--accent)}
   .lab-done-banner{margin-top:10px;padding:11px 14px;border-radius:12px;background:rgba(51,209,122,.14);border:1px solid rgba(51,209,122,.4);color:var(--green);font-weight:700;font-size:.86rem}
+  /* nano/vi file editor overlay */
+  .ed-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+  .ed-win{width:min(780px,96vw);height:min(72vh,580px);background:#0b0e15;border:1px solid #2a3342;border-radius:12px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+  .ed-hd{padding:10px 14px;background:#151b26;color:#cdd5e2;font-family:ui-monospace,Menlo,monospace;font-size:.82rem;border-bottom:1px solid #2a3342}
+  .ed-hd span{color:#63c8ff}
+  .ed-ta{flex:1;background:#0b0e15;color:#e6e9f0;border:0;outline:0;padding:14px;font-family:ui-monospace,Menlo,monospace;font-size:.85rem;line-height:1.5;resize:none;white-space:pre;overflow:auto}
+  .ed-ft{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#151b26;border-top:1px solid #2a3342;flex-wrap:wrap}
+  .ed-keys{color:#7a8699;font-family:ui-monospace,Menlo,monospace;font-size:.76rem}
+  .ed-keys b{color:#5ee0a0}
+  .ed-btn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:none}
+  .ed-btn.ghost{background:transparent;color:#cdd5e2;border:1px solid #3a4658}
 </style>
 </head>
 <body>
@@ -733,7 +744,7 @@ function labMode(){
   currentRender=labMode; S.onKey=null; try{clearTimer();}catch(e){}
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // ---- simulated environment state ----
-  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],lic:'Enterprise',deploy:null},o);
+  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],tcp:[],udp:[],scripts:[],hec:false,hectoken:null,fs:{},lic:'Enterprise',deploy:null},o);
   const LS={cur:'am1',stack:[],hosts:{
     am1:mk({home:'/opt/splunk',role:'Agent Management / Test Server',type:'ent',started:true,servername:'splunk01',mon:[{path:'/opt/log/www2/access.log',index:'test',st:'access_combined_wcookie'}]}),
     sh1:mk({home:'/opt/splunk',role:'Search Head',type:'sh',started:true,servername:'sh1'}),
@@ -744,6 +755,18 @@ function labMode(){
     idx2:mk({home:'/opt/splunk',role:'Indexer 2',type:'idx',started:true,listen:[9997],servername:'idx2'}),
   }};
   const H=()=>LS.hosts[LS.cur];
+  function absPath(p){if(!p)return p;return p[0]==='/'?p:H().home+'/'+p;}
+  function genFile(path){const h=H();
+    if(/inputs\.conf$/.test(path)){let o='';h.mon.forEach(m=>o+=`[monitor://${m.path}]\ndisabled = false\nindex = ${m.index||'default'}\nsourcetype = ${m.st||'auto'}\n\n`);h.listen.forEach(p=>o+=`[splunktcp://${p}]\nconnection_host = ip\n\n`);h.tcp.forEach(t=>o+=`[tcp://${t.port}]\nsourcetype = ${t.st||'auto'}\n\n`);h.udp.forEach(t=>o+=`[udp://${t.port}]\nsourcetype = ${t.st||'auto'}\n\n`);h.scripts.forEach(s=>o+=`[script://${s.path}]\ninterval = ${s.interval||60}\nsourcetype = ${s.st||'auto'}\nindex = ${s.index||'default'}\n\n`);return o||'# inputs.conf — add stanzas like [monitor:///path], [tcp://514], [script://./bin/x.sh]\n';}
+    if(/outputs\.conf$/.test(path)){if(!h.fwd.length)return '# outputs.conf — define [tcpout] and a server list to forward\n';return `[tcpout]\ndefaultGroup = default-autolb-group\n\n[tcpout:default-autolb-group]\ndisabled = false\nserver = ${h.fwd.join(',')}\n`;}
+    if(/server\.conf$/.test(path))return `[general]\nserverName = ${h.servername}\n`;
+    if(/props\.conf$/.test(path))return '# props.conf — e.g. [sourcetype]\\nTRANSFORMS-route = <transform_name>\n';
+    if(/transforms\.conf$/.test(path))return '# transforms.conf — e.g. [setnull]\\nREGEX = .\\nDEST_KEY = queue\\nFORMAT = nullQueue\n';
+    return '';}
+  function fileContent(path){const h=H();const ap=absPath(path);return (ap in h.fs)?h.fs[ap]:genFile(ap);}
+  function parseInto(path,text){const h=H();const ap=absPath(path);h.fs[ap]=text;
+    if(/outputs\.conf$/.test(ap)){const m=text.match(/^\s*server\s*=\s*(.+)$/mi);h.fwd=m?m[1].split(',').map(s=>s.trim()).filter(Boolean):[];}
+    if(/inputs\.conf$/.test(ap)){h.mon=[];h.listen=[];h.tcp=[];h.udp=[];h.scripts=[];text.split(/\n(?=\[)/).forEach(bl=>{const hd=bl.match(/^\[(monitor|splunktcp|tcp|udp|script):\/\/([^\]]+)\]/);if(!hd)return;const gv=k=>{const mm=bl.match(new RegExp('^\\s*'+k+'\\s*=\\s*(.+)$','mi'));return mm?mm[1].trim():undefined;};const kind=hd[1],val=hd[2];if(kind==='monitor')h.mon.push({path:val,index:gv('index')||'default',st:gv('sourcetype')||'auto'});else if(kind==='splunktcp')h.listen.push(+val);else if(kind==='tcp')h.tcp.push({port:val,st:gv('sourcetype')});else if(kind==='udp')h.udp.push({port:val,st:gv('sourcetype')});else if(kind==='script')h.scripts.push({path:val,interval:gv('interval'),st:gv('sourcetype'),index:gv('index')});});}}
   const history=[]; // {host, cmd}
   // ---- guided modules ----
   const MODULES=[
@@ -772,6 +795,35 @@ function labMode(){
       {t:'On UF2 (ssh uf2), start Splunk.',c:'splunk start --accept-license',test:(h,c)=>h==='uf2'&&/^splunk start\b/.test(c)},
       {t:'Configure UF2 to forward to the intermediate forwarder hf1:9901.',c:'splunk add forward-server hf1:9901',test:(h,c)=>h==='uf2'&&/^splunk add forward-server hf1:9901\b/.test(c)},
     ]},
+    {id:'edit',name:'★ · Edit Files (nano/vi)',intro:'Edit real config files directly with nano or vi. Saved changes are parsed back into the running config.',steps:[
+      {t:'SSH into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+      {t:'Open UF1 outputs.conf in nano.',c:'nano /opt/splunkforwarder/etc/system/local/outputs.conf',test:(h,c)=>h==='uf1'&&/^(nano|vi|vim) .*outputs\.conf$/.test(c)},
+      {t:'Edit it so UF1 forwards to BOTH idx1:9997 and idx2:9997 (server = idx1:9997,idx2:9997), then save.',c:'nano /opt/splunkforwarder/etc/system/local/outputs.conf',state:(LS)=>{const f=LS.hosts.uf1.fwd;return f.includes('idx1:9997')&&f.includes('idx2:9997');}},
+      {t:'Open inputs.conf and add a [monitor:///var/log/secure] stanza with index = os, then save.',c:'nano /opt/splunkforwarder/etc/apps/search/local/inputs.conf',test:(h,c)=>h==='uf1'&&/^(nano|vi|vim) .*inputs\.conf$/.test(c)},
+      {t:'Result: the /var/log/secure monitor is now in the running config (verify with btool).',c:'splunk btool inputs list',state:(LS)=>LS.hosts.uf1.mon.some(m=>/\/var\/log\/secure/.test(m.path))},
+    ]},
+    {id:'m6',name:'6 · Monitor Inputs',intro:'Add and verify file/directory monitor inputs on UF1.',steps:[
+      {t:'SSH into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+      {t:'Add a monitor for /var/log/messages (index os, sourcetype syslog).',c:'splunk add monitor /var/log/messages -index os -sourcetype syslog',test:(h,c)=>h==='uf1'&&/^splunk add monitor \/var\/log\/messages\b/.test(c)&&/-index\s+os/.test(c)},
+      {t:'List the monitors to confirm it was added.',c:'splunk list monitor',test:(h,c)=>h==='uf1'&&/^splunk list monitor\b/.test(c)},
+      {t:'Inspect the merged inputs with btool --debug.',c:'splunk btool inputs list --debug',test:(h,c)=>h==='uf1'&&/^splunk btool inputs list\b/.test(c)&&/--debug/.test(c)},
+    ]},
+    {id:'m7',name:'7 · Network Inputs',intro:'Configure TCP and UDP network inputs on the heavy forwarder (HF1).',steps:[
+      {t:'SSH into HF1.',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
+      {t:'Add a UDP input on 514 for syslog.',c:'splunk add udp 514 -sourcetype syslog',test:(h,c)=>h==='hf1'&&/^splunk add udp 514\b/.test(c)},
+      {t:'Add a TCP input on 5140 for cisco:asa.',c:'splunk add tcp 5140 -sourcetype cisco:asa',test:(h,c)=>h==='hf1'&&/^splunk add tcp 5140\b/.test(c)},
+      {t:'View your new network stanzas in inputs.conf.',c:'cat /opt/splunk/etc/apps/search/local/inputs.conf',test:(h,c)=>h==='hf1'&&/^cat .*inputs\.conf$/.test(c)},
+    ]},
+    {id:'m9',name:'9 · HEC Inputs',intro:'Enable the HTTP Event Collector and create a token for agentless ingestion.',steps:[
+      {t:'Enable the HTTP Event Collector on am1.',c:'splunk http-event-collector enable',test:(h,c)=>h==='am1'&&/^splunk http-event-collector enable\b/.test(c)},
+      {t:'Create a HEC token named app_hec.',c:'splunk http-event-collector create app_hec',test:(h,c)=>h==='am1'&&/^splunk http-event-collector create app_hec\b/.test(c)},
+      {t:'List HEC to confirm it is enabled with a token.',c:'splunk http-event-collector list',test:(h,c)=>h==='am1'&&/^splunk http-event-collector list\b/.test(c)},
+    ]},
+    {id:'m14',name:'14 · Filter & Route',intro:'Drop unwanted events at index time by editing props.conf + transforms.conf to route to the nullQueue. Do this on a parsing tier — HF1.',steps:[
+      {t:'SSH into HF1 (a heavy forwarder parses data).',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
+      {t:'Edit transforms.conf: add a [setnull] transform with REGEX, DEST_KEY = queue, and FORMAT = nullQueue.',c:'nano /opt/splunk/etc/apps/search/local/transforms.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/nullqueue/i.test(t))},
+      {t:'Edit props.conf: reference the transform (TRANSFORMS-set = setnull) under the target sourcetype.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/transforms-/i.test(t))},
+    ]},
   ];
   let active=0;
   // ---- command engine ----
@@ -794,7 +846,11 @@ function labMode(){
       case 'add':{const w=(r[0]||'').toLowerCase(),b=r.slice(1);
         if(w==='forward-server'){if(!b[0])return need('add forward-server <host>:<port>');if(!h.fwd.includes(b[0]))h.fwd.push(b[0]);return `Added forwarding to: ${esc(b[0])}.`;}
         if(w==='monitor'){if(!b[0])return need('add monitor <path> [-index x] [-sourcetype y]');const gi=b.indexOf('-index'),gs=b.indexOf('-sourcetype');h.mon.push({path:b[0],index:gi>-1?b[gi+1]:'default',st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added monitor of '${esc(b[0])}'.</span>`;}
-        return `<span class="err">Unknown 'add' object '${esc(r[0]||'')}'.</span>`;}
+        if(w==='tcp'){if(!b[0])return need('add tcp <port> [-sourcetype x]');const gs=b.indexOf('-sourcetype');h.tcp.push({port:b[0],st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added TCP input on port ${esc(b[0])}.</span>`;}
+        if(w==='udp'){if(!b[0])return need('add udp <port> [-sourcetype x]');const gs=b.indexOf('-sourcetype');h.udp.push({port:b[0],st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added UDP input on port ${esc(b[0])}.</span>`;}
+        if(w==='exec'){if(!b[0])return need('add exec <script> [-interval n] [-index x]');const ii=b.indexOf('-interval'),xi=b.indexOf('-index');h.scripts.push({path:b[0],interval:ii>-1?b[ii+1]:60,index:xi>-1?b[xi+1]:'default',st:'auto'});return `<span class="ok">Added scripted input '${esc(b[0])}'.</span>`;}
+        return `<span class="err">Unknown 'add' object '${esc(r[0]||'')}'.</span> Try: forward-server | monitor | tcp | udp | exec`;}
+      case 'http-event-collector':case 'hec':{const w=(r[0]||'').toLowerCase();if(w==='enable'){h.hec=true;return `<span class="ok">HTTP Event Collector enabled</span> (listening on 8088).`;}if(w==='create'){if(!r[1])return need('http-event-collector create <name>');h.hec=true;h.hectoken='11111111-2222-3333-4444-555555555555';return `<span class="ok">HEC token created for '${esc(r[1])}'.</span>\n  token: ${h.hectoken}`;}if(w==='list')return h.hec?`http: enabled\n  token: ${h.hectoken||'(none created yet)'}`:`http: <span class="warn">disabled</span> — run: splunk http-event-collector enable`;return `<span class="err">Unknown HEC action.</span> Try: enable | create <name> | list`;}
       case 'remove':{if((r[0]||'').toLowerCase()==='forward-server'){const t=r[1];const before=h.fwd.length;h.fwd=h.fwd.filter(x=>x!==t);return before>h.fwd.length?`Removed forwarding to: ${esc(t)}.`:`<span class="warn">${esc(t||'')} was not a configured forward-server.</span>`;}return `<span class="err">Unknown 'remove' object.</span>`;}
       case 'list':{const w=(r[0]||'').toLowerCase();
         if(w==='forward-server'||w==='forward-servers')return h.fwd.length?`Active forwards:\n${h.fwd.map(f=>'    '+esc(f)+' <span class="ok">(active)</span>').join('\n')}\nConfigured but inactive forwards:\n    None`:`Active forwards:\n    None\nConfigured but inactive forwards:\n    None`;
@@ -822,7 +878,8 @@ function labMode(){
     if(cmd==='exit'||cmd==='logout'){if(LS.stack.length){const from=LS.cur;LS.cur=LS.stack.pop();return `<span class="dim">Connection to ${esc(from)} closed.</span>`;}return `<span class="warn">You are on am1 (the jump host). Use the ← Back button to leave the lab.</span>`;}
     const norm=normCmd(t);
     if(/^splunk\b/.test(norm))return splunk(norm.split(' ').slice(1));
-    if(cmd==='cat'){const f=parts[1]||'';if(/inputs\.conf$/.test(f))return inputsText();if(/outputs\.conf$/.test(f))return outputsText();if(/server\.conf$/.test(f))return `[general]\nserverName = ${H().servername}`;if(!f)return `<span class="err">cat: missing operand</span>`;return `<span class="err">cat: ${esc(f)}: No such file or directory</span>`;}
+    if(cmd==='nano'||cmd==='vi'||cmd==='vim'){const f=parts[1];if(!f)return `<span class="err">usage: ${cmd} &lt;file&gt;</span>`;openEditor(f,cmd==='nano'?'nano':'vi');return null;}
+    if(cmd==='cat'){const f=parts[1]||'';if(!f)return `<span class="err">cat: missing operand</span>`;const c=fileContent(f);return c!==''?esc(c):`<span class="err">cat: ${esc(f)}: No such file or directory</span>`;}
     if(cmd==='rm'){const f=parts[1]||'';if(/outputs\.conf$/.test(f)){H().fwd=[];return '';}return `<span class="dim">rm: ${esc(f)}: (simulated — only outputs.conf removal is modeled)</span>`;}
     if(cmd==='ls')return `bin   etc   var   lib   README`;
     if(cmd==='pwd')return `${H().home}/bin`;
@@ -850,10 +907,10 @@ function labMode(){
   const body=v.querySelector('#labbody'), side=v.querySelector('#labside'), title=v.querySelector('#labtitle');
   const line=(html='')=>{const d=document.createElement('div');d.className='term-line';d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;};
   const hist=[]; let hi=-1;
-  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','help'];
+  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','http-event-collector','help'];
   function renderSide(){
     const m=MODULES[active];
-    const done=m.steps.map(st=>history.some(e=>st.test(e.host,e.cmd)));
+    const done=m.steps.map(st=>(st.test&&history.some(e=>st.test(e.host,e.cmd)))||(st.state&&st.state(LS))||false);
     const dn=done.filter(Boolean).length;
     side.innerHTML=`<div class="lab-mods">${MODULES.map((mm,i)=>`<button class="lab-mod ${i===active?'on':''}" data-i="${i}">${mm.name}</button>`).join('')}</div>
       <div class="lab-card"><h4>📋 ${esc(m.name.replace(/^\d+ · /,''))}<span class="lab-prog">${dn}/${m.steps.length}</span></h4>
@@ -862,6 +919,20 @@ function labMode(){
       ${dn===m.steps.length?`<div class="lab-done-banner">🎉 Module complete — every step verified. Try the next module above.</div>`:''}`;
     side.querySelectorAll('.lab-mod').forEach(b=>b.onclick=()=>{active=+b.dataset.i;renderSide();});
     side.querySelectorAll('.lab-cmd').forEach(c=>c.onclick=()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp){inp.value=c.dataset.c;inp.focus();}});
+  }
+  function openEditor(path,ed){
+    const ap=absPath(path);
+    const ov=document.createElement('div');ov.className='ed-overlay';
+    ov.innerHTML=`<div class="ed-win"><div class="ed-hd">${ed==='vi'?'VI':'GNU nano'} — <span>${esc(ap)}</span></div>
+      <textarea class="ed-ta" spellcheck="false"></textarea>
+      <div class="ed-ft"><span class="ed-keys">${ed==='vi'?'<b>⌃S</b> / <b>Esc</b> to write &amp; quit (vi <b>:wq</b>)':'<b>⌃O</b>/<b>⌃S</b> Save · <b>⌃X</b>/<b>Esc</b> Exit'}</span><span><button class="ed-btn ed-save">Save &amp; Exit</button> <button class="ed-btn ghost ed-cancel">Cancel</button></span></div></div>`;
+    v.appendChild(ov);
+    const ta=ov.querySelector('.ed-ta');ta.value=fileContent(path);ta.focus();try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(e){}
+    const close=()=>{ov.remove();const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();};
+    const save=()=>{parseInto(path,ta.value);line(`<span class="ok">[ Wrote ${ta.value.split(/\n/).length} lines to ${esc(ap)} ]</span>`);renderSide();close();};
+    ov.querySelector('.ed-save').onclick=save;
+    ov.querySelector('.ed-cancel').onclick=close;
+    ta.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='o'||e.key==='x')){e.preventDefault();save();}else if(e.key==='Escape'){e.preventDefault();save();}});
   }
   function newPrompt(){
     title.textContent='student@'+LS.cur;
