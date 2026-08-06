@@ -288,6 +288,20 @@
     .qlayout{flex-direction:column}
     .qside{width:100%;position:static;max-height:250px;order:2;margin-top:2px}
   }
+  /* CLI Lab terminal */
+  .term{background:#0b0e15;border:1px solid #232a37;border-radius:14px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.4);margin-top:6px}
+  .term-hd{display:flex;align-items:center;gap:8px;padding:9px 13px;background:#151b26;border-bottom:1px solid #232a37}
+  .term-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+  .term-title{margin-left:8px;color:#7a8699;font-size:.78rem;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .term-body{padding:13px 14px;height:min(58vh,440px);overflow-y:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.84rem;line-height:1.5;color:#d7dce5;cursor:text}
+  .term-line{white-space:pre-wrap;word-break:break-word}
+  .term-line .ok{color:#5ee0a0}.term-line .err{color:#ff6b6b}.term-line .warn{color:#ffce6b}.term-line .dim{color:#6b7688}.term-line .cy{color:#63c8ff}.term-line .yl{color:#ffce6b}
+  .term-inrow{display:flex;gap:8px;align-items:baseline}
+  .term-prompt{color:#5ee0a0;flex-shrink:0;font-weight:600}
+  .term-input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#eef1f6;font:inherit;caret-color:#5ee0a0;padding:0}
+  .term-hint{margin-top:10px;color:var(--muted);font-size:.8rem;line-height:1.6}
+  .term-hint code{background:var(--card);border:1px solid var(--hair);border-radius:6px;padding:1px 6px;font-size:.82em;cursor:pointer}
+  .term-hint code:hover{border-color:var(--accent);color:var(--text)}
 </style>
 </head>
 <body>
@@ -493,6 +507,7 @@ function examInfo(){
     ${bank==='power'?`<div class="glass mode" data-m="review"><div class="mi">📖</div><div><b>Rapid Review</b><p>${REVIEW.length} quick facts, grouped by topic.</p></div><div class="arr">›</div></div>`:''}
     <div class="glass mode ${hasMissed?'':'dis'}" data-m="missed"><div class="mi">🔁</div><div><b>Review Missed</b><p>${hasMissed?`Re-quiz the ones you've missed.`:'Take a quiz first to unlock.'}</p></div>${hasMissed?'<div class="arr">›</div>':''}</div>
     ${flaggedCount?`<div class="glass mode" data-m="flagged"><div class="mi">⚑</div><div><b>Flagged</b><p>Revisit the ${flaggedCount} question${flaggedCount>1?'s':''} you flagged.</p></div><div class="arr">›</div></div>`:''}
+    <div class="glass mode" data-m="terminal"><div class="mi">🖥️</div><div><b>CLI Lab<span class="rectag">New</span></b><p>Practice real Splunk admin commands in a simulated terminal.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="appendix"><div class="mi">📚</div><div><b>Appendix</b><p>Browse all ${aq.length} questions with answers.</p></div><div class="arr">›</div></div>`;
   const v=$(`<div class="view">${topBar()}
     <button class="back">← All exams</button>
@@ -539,6 +554,7 @@ function examInfo(){
     if(mode==='daily'){startQuiz('daily',buildDaily(bank,20),false);return;}
     if(mode==='resume'){resumeQuiz();return;}
     if(mode==='appendix'){appendix();return;}
+    if(mode==='terminal'){terminalLab();return;}
     if(mode==='commands'){startCommandQuiz();return;}
     if(mode==='review'){reviewPicker();return;}
     if(mode==='challenge'){startQuiz('challenge',aq.filter(q=>q.hard).map(q=>q.id),shuf());return;}
@@ -553,6 +569,141 @@ function examInfo(){
   const more=v.querySelector('#bpmore'), tg=v.querySelector('#bptoggle');
   tg.onclick=()=>{const open=more.style.display!=='none';more.style.display=open?'none':'block';tg.textContent=open?'See all 10 categories ↓':'See less ↑';};
   show(v);
+}
+
+/* ============ CLI LAB — simulated Splunk admin terminal ============ */
+function terminalLab(){
+  currentRender=terminalLab; S.onKey=null; try{clearTimer();}catch(e){}
+  const SPLUNK_HOME='/opt/splunk';
+  const v=$(`<div class="view">${topBar()}<button class="back" id="tback">← Back</button>
+    <div class="brand" style="margin-bottom:10px"><div class="logo">🖥️</div><h1>CLI Lab</h1><p>A simulated Splunk admin shell — practice the commands safely</p></div>
+    <div class="term">
+      <div class="term-hd"><span class="term-dot" style="background:#ff5f57"></span><span class="term-dot" style="background:#febc2e"></span><span class="term-dot" style="background:#28c840"></span><span class="term-title">splunk@lab: ${SPLUNK_HOME}/bin</span></div>
+      <div class="term-body" id="tbody"></div>
+    </div>
+    <div class="term-hint">Simulated — nothing runs on a real server. Try:
+      <code>splunk status</code> <code>splunk version</code> <code>splunk list licenses</code> <code>splunk btool inputs list --debug</code> <code>splunk add monitor /var/log/secure -index os -sourcetype linux_secure</code> <code>splunk reload deploy-server</code> <code>splunk list forward-server</code> <code>help</code> <code>clear</code>
+      <br><span class="dim" style="color:var(--muted)">↑/↓ = command history · Tab = complete a <code>splunk</code> subcommand · type <b>help</b> for the full list</span></div>`);
+  wireTop(v);
+  v.querySelector('#tback').onclick=examInfo;
+  const body=v.querySelector('#tbody');
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const line=(html='')=>{const d=document.createElement('div');d.className='term-line';d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;};
+  const promptHtml='<span class="term-prompt">splunk@lab:~$</span>';
+  const hist=[]; let hi=-1;
+  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','reload','apply','show','search','help','edit','set','clone-prep-clear-config'];
+  const LICENSE=`Splunk Enterprise (NFR) — group: Enterprise, status: VALID
+  daily volume : 50 GB/day (53687091200 bytes)
+  expires      : end of CY2026
+  license id   : Splunk Internal License DO NOT DISTRIBUTE`;
+  function splunkCmd(args){
+    const sub=(args[0]||'').toLowerCase(), rest=args.slice(1);
+    const need=(u)=>`<span class="err">Argument required.</span>\nUsage: <span class="cy">splunk ${u}</span>`;
+    switch(sub){
+      case '': case 'help': {
+        if(sub==='help'&&rest[0]){const h={status:'splunk status — show whether splunkd/splunkweb are running',btool:'splunk btool <conf> list [--debug] — print merged config and its source file; splunk btool check validates configs','add':'splunk add monitor|oneshot|forward-server ...','list':'splunk list licenses|monitor|forward-server|index|inputstatus'};return h[rest[0]]||`No extended help for '${esc(rest[0])}'.`;}
+        return `<span class="cy">Splunk CLI</span> — common admin commands:
+  <span class="ok">status</span>                     Is Splunk running?
+  <span class="ok">start</span> | <span class="ok">stop</span> | <span class="ok">restart</span>    Control the splunkd/web processes
+  <span class="ok">version</span>                    Show the Splunk version
+  <span class="ok">list</span> licenses|monitor|forward-server|index|inputstatus
+  <span class="ok">btool</span> <conf> list --debug   Show effective config + source file
+  <span class="ok">btool</span> check                Validate configuration files
+  <span class="ok">add monitor</span> <path> [-index x -sourcetype y]
+  <span class="ok">add oneshot</span> <file>       Index a file once
+  <span class="ok">add forward-server</span> <host:port>
+  <span class="ok">enable</span>|<span class="ok">disable</span> boot-start    Auto-start on boot
+  <span class="ok">reload deploy-server</span>       Re-read deployment-apps & serverclass
+  <span class="ok">apply cluster-bundle</span>       Push indexer-cluster config bundle
+Tip: real commands prompt for admin credentials; that step is simulated here.`;}
+      case 'status': return `splunkd is <span class="ok">running</span> (PID: 4271).\nsplunk helpers are <span class="ok">running</span> (PIDs: 4290, 4322).\nSplunk Web is <span class="ok">running</span> at http://127.0.0.1:8000.`;
+      case 'version': return `Splunk 10.4.1 (build 5a009d941268)`;
+      case 'start': return `Starting splunkd...\n<span class="dim">Checking prerequisites...</span>\n  Checking mgmt port [8089]: open\n  Checking http port [8000]: open\nAll preliminary checks passed.\nStarting splunk server daemon (splunkd)...  <span class="ok">Done</span>\nSplunk Web is at http://127.0.0.1:8000`;
+      case 'restart': return `Stopping splunkd...\n<span class="ok">Done.</span>\nStarting splunkd...  <span class="ok">Done</span>\nSplunk Web is at http://127.0.0.1:8000`;
+      case 'stop': return `Stopping splunkd...\nShutting down. Please wait, as this may take a few minutes.\nStopping splunk helpers...\n<span class="ok">Done.</span>`;
+      case 'list': {
+        const w=(rest[0]||'').toLowerCase();
+        if(w==='licenses'||w==='license')return LICENSE;
+        if(w==='monitor'||w==='inputstatus')return `Monitored Directories:\n  ${SPLUNK_HOME}/var/log/splunk\n     ${SPLUNK_HOME}/var/log/splunk/splunkd.log  (file, position: 1048576)\nMonitored Files:\n  /var/log/secure  <span class="ok">(reading)</span>`;
+        if(w==='forward-server'||w==='forward')return `Active forwards:\n    10.0.0.1:9997  <span class="ok">(status: connect_done)</span>\n    10.0.0.2:9997  <span class="ok">(status: connect_done)</span>\nConfigured but inactive forwards:\n    None`;
+        if(w==='index'||w==='indexes')return `main\n_internal\n_audit\n_introspection\nhistory\nsummary\nos\nweb_access`;
+        return `<span class="err">Unknown object '${esc(rest[0]||'')}'.</span>\nUsage: <span class="cy">splunk list licenses|monitor|forward-server|index|inputstatus</span>`;
+      }
+      case 'btool': {
+        if((rest[0]||'')==='check')return `<span class="ok">Configuration files validated — no errors found.</span>`;
+        const conf=rest[0]; if(!conf)return need('btool <conf-file> list [--debug]');
+        const dbg=rest.includes('--debug');
+        if(conf==='inputs'){const p=dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/apps/my_app/local/inputs.conf</span> ':'';return `${p}[monitor:///var/log/secure]\n${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/apps/my_app/local/inputs.conf</span> ':''}index = os\n${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/system/default/inputs.conf</span> ':''}sourcetype = linux_secure\n${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/system/local/inputs.conf</span> ':''}host = idx-forwarder-01`;}
+        if(conf==='outputs')return `${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/system/local/outputs.conf</span> ':''}[tcpout]\n${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/system/local/outputs.conf</span> ':''}defaultGroup = my_indexers\n${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/apps/my_app/local/outputs.conf</span> ':''}[tcpout:my_indexers]\n${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/apps/my_app/local/outputs.conf</span> ':''}server = 10.0.0.1:9997,10.0.0.2:9997`;
+        return `${dbg?'<span class="dim">'+SPLUNK_HOME+'/etc/system/default/'+esc(conf)+'.conf</span> ':''}[default]\n<span class="dim"># (merged view of ${esc(conf)}.conf — add --debug to see the source file of each setting)</span>`;
+      }
+      case 'add': {
+        const w=(rest[0]||'').toLowerCase(), a2=rest.slice(1);
+        if(w==='monitor'){if(!a2[0])return need('add monitor <path> [-index <idx>] [-sourcetype <st>]');const gi=a2.indexOf('-index'),gs=a2.indexOf('-sourcetype');const idx=gi>-1?a2[gi+1]:'default',st=gs>-1?a2[gs+1]:'(auto)';return `<span class="ok">Added monitor of '${esc(a2[0])}'.</span>\n  index      = ${esc(idx)}\n  sourcetype = ${esc(st)}\n<span class="dim">Configuration reload needed on some settings — restart if prompted.</span>`;}
+        if(w==='oneshot'){if(!a2[0])return need('add oneshot <file>');return `<span class="ok">Oneshot '${esc(a2[0])}' added.</span> The file is indexed one time (no ongoing monitoring).`;}
+        if(w==='forward-server'){if(!a2[0])return need('add forward-server <host>:<port>');return `<span class="ok">Added forwarding to ${esc(a2[0])}.</span> Restart the forwarder for it to take effect.`;}
+        if(w==='user'){return `<span class="ok">User created.</span> <span class="dim">(role assignment and password prompt simulated)</span>`;}
+        return `<span class="err">Unknown 'add' object '${esc(rest[0]||'')}'.</span>\nTry: <span class="cy">splunk add monitor|oneshot|forward-server</span>`;
+      }
+      case 'enable': return (rest[0]==='boot-start')?`<span class="ok">Init script installed.</span> Splunk will start automatically on boot.`:`<span class="err">Unknown 'enable' target.</span> Try: splunk enable boot-start`;
+      case 'disable': return (rest[0]==='boot-start')?`<span class="ok">Init script removed.</span> Splunk will no longer auto-start on boot.`:`<span class="err">Unknown 'disable' target.</span> Try: splunk disable boot-start`;
+      case 'reload': return (rest[0]==='deploy-server')?`Reloading serverclass(es)...\n  Reading ${SPLUNK_HOME}/etc/deployment-apps ...\n  serverclass 'all_forwarders' → app 'syslog_forwarder_config'\n<span class="ok">Done.</span> Clients receive updates on their next phone-home.`:`<span class="err">Nothing to reload for '${esc(rest[0]||'')}'.</span> Try: splunk reload deploy-server`;
+      case 'apply': return (rest[0]==='cluster-bundle')?`Applying cluster bundle to peers...\n  Validating bundle... <span class="ok">ok</span>\n  Pushing to 3 peers... <span class="ok">ok</span>\n<span class="warn">Rolling restart of peers may be required.</span>`:`<span class="err">Unknown 'apply' target.</span> Try: splunk apply cluster-bundle`;
+      case 'show': {const w=(rest[0]||'').toLowerCase();if(w==='config'||w==='inputs'||w==='splunkd-port')return splunkCmd(['btool','inputs','list','--debug']);if(w==='default-hostname')return `Default hostname is 'idx-forwarder-01'.`;return `<span class="dim">show ${esc(rest[0]||'')} — not simulated. Try 'splunk btool <conf> list --debug'.</span>`;}
+      case 'search': {const q=args.slice(1).join(' ').replace(/^['"]|['"]$/g,'');if(!q)return need("search '<SPL>'");return `<span class="dim"># ${esc(q)}</span>\n_time                 host              sourcetype     count\n2027-05-25 10:30:00   idx-forwarder-01  linux_secure   142\n2027-05-25 10:25:00   idx-forwarder-01  linux_secure   118\n<span class="dim">(2 of 260 events — simulated results)</span>`;}
+      case 'edit': case 'set': return `<span class="ok">Setting updated.</span> <span class="dim">(simulated; a real change may need a restart)</span>`;
+      default: return `<span class="err">Command '${esc(sub)}' not found on the splunk CLI.</span>\nType <span class="cy">splunk help</span> for the list of supported commands.`;
+    }
+  }
+  function shellCmd(raw){
+    const t=raw.trim(); if(!t)return '';
+    const parts=t.split(/\s+/); let cmd=parts[0].toLowerCase();
+    if(cmd==='sudo'){parts.shift();if(!parts.length)return need2();cmd=parts[0].toLowerCase();}
+    const args=parts.slice(1);
+    if(cmd==='clear'||cmd==='cls'){body.innerHTML='';return null;}
+    if(cmd==='help'||cmd==='?'){return splunkCmd(['help']);}
+    if(cmd==='splunk'||cmd==='./splunk'){return splunkCmd(args);}
+    if(cmd==='ls')return `bin   etc   var   lib   share   README   splunk`;
+    if(cmd==='pwd')return `${SPLUNK_HOME}/bin`;
+    if(cmd==='whoami')return `splunk`;
+    if(cmd==='echo')return esc(args.join(' '));
+    if(cmd==='cd')return '';
+    if(cmd==='cat'){const f=args[0]||'';if(/inputs\.conf$/.test(f))return `[monitor:///var/log/secure]\nindex = os\nsourcetype = linux_secure`;if(!f)return `<span class="err">cat: missing file operand</span>`;return `<span class="err">cat: ${esc(f)}: No such file or directory</span>`;}
+    if(cmd==='man')return `<span class="dim">No manual entry. In this lab, use <span class="cy">splunk help</span> instead.</span>`;
+    if(cmd==='exit'){examInfo();return null;}
+    return `<span class="err">${esc(cmd)}: command not found.</span> This lab focuses on the <span class="cy">splunk</span> CLI — type <span class="cy">splunk help</span>.`;
+  }
+  function need2(){return `<span class="err">usage: sudo <command></span>`;}
+  function newPrompt(){
+    const row=document.createElement('div'); row.className='term-inrow';
+    row.innerHTML=`${promptHtml} `;
+    const inp=document.createElement('input'); inp.className='term-input'; inp.setAttribute('autocomplete','off'); inp.setAttribute('autocapitalize','off'); inp.setAttribute('spellcheck','false');
+    row.appendChild(inp); body.appendChild(row); inp.focus(); body.scrollTop=body.scrollHeight;
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){
+        const raw=inp.value; inp.disabled=true; hi=-1;
+        // freeze this line as history text
+        row.innerHTML=`${promptHtml} <span>${esc(raw)}</span>`;
+        if(raw.trim())hist.push(raw);
+        const out=shellCmd(raw);
+        if(out===null){/* cleared or exited */ if(document.body.contains(body))newPrompt(); return;}
+        if(out!=='')line(out);
+        newPrompt(); e.preventDefault();
+      } else if(e.key==='ArrowUp'){ if(hist.length){hi=hi<0?hist.length-1:Math.max(0,hi-1);inp.value=hist[hi];setTimeout(()=>inp.setSelectionRange(inp.value.length,inp.value.length),0);} e.preventDefault(); }
+      else if(e.key==='ArrowDown'){ if(hi>=0){hi++;if(hi>=hist.length){hi=-1;inp.value='';}else inp.value=hist[hi];} e.preventDefault(); }
+      else if(e.key==='Tab'){ const m=inp.value.match(/^(\s*splunk\s+)(\S*)$/); if(m){const pfx=m[2].toLowerCase();const hit=SUBS.filter(s=>s.startsWith(pfx));if(hit.length===1){inp.value=m[1]+hit[0]+' ';}else if(hit.length>1){let cp=hit[0];hit.forEach(h=>{while(cp&&!h.startsWith(cp))cp=cp.slice(0,-1);});inp.value=m[1]+cp;}} e.preventDefault(); }
+    });
+    return inp;
+  }
+  function newPromptCarry(val){const inp=newPrompt();inp.value=val;}
+  line(`<span class="cy">Splunk CLI Lab</span> — a safe, simulated admin shell.  Type <span class="ok">help</span> to get started, <span class="ok">clear</span> to reset.`);
+  line(`<span class="dim">Nothing here touches a real Splunk instance.</span>`);
+  newPrompt();
+  // click a hint chip to run it; click anywhere in the body to focus the input
+  body.addEventListener('click',()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
+  v.querySelectorAll('.term-hint code').forEach(c=>c.onclick=()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp){inp.value=c.textContent;inp.focus();}});
+  show(v);
+  requestAnimationFrame(()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
 }
 
 /* ============ QUIZ engine ============ */
