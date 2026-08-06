@@ -306,10 +306,21 @@
   .lablayout{display:flex;gap:14px;align-items:flex-start}
   .lab-main{flex:1;min-width:0}
   .lab-side{width:300px;flex-shrink:0}
-  @media(max-width:900px){.lablayout{flex-direction:column}.lab-side{width:100%;order:2}}
+  .lab-topics{width:190px;flex-shrink:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;border:1px solid var(--hair);border-radius:14px;background:var(--card);padding:6px}
+  .lt-hd{padding:9px 10px 7px;font-size:.68rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .lab-topic{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:9px;padding:8px 10px;color:var(--text);font:inherit;font-size:.79rem;font-weight:600;cursor:pointer;box-shadow:none;margin-bottom:2px;line-height:1.3}
+  .lab-topic:hover{background:var(--card-solid)}
+  .lab-topic.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .lab-topic .lt-name{flex:1;min-width:0}
+  .lab-topic .tdone{color:var(--green);font-weight:800;flex-shrink:0}
+  .lab-topic.on .tdone{color:#fff}
+  .lab-topic .tprog{color:var(--muted);font-size:.66rem;font-weight:600;flex-shrink:0}
+  .lab-topic.on .tprog{color:rgba(255,255,255,.85)}
+  @media(max-width:900px){.lablayout{flex-direction:column}.lab-topics{width:100%;position:static;max-height:210px;order:1}.lab-main{order:2}.lab-side{width:100%;order:3}}
   /* wider Guided Lab layout (breaks out of the 820px column) */
   .labwide{width:min(1200px,96vw);position:relative;left:50%;transform:translateX(-50%)}
   .labwide .lab-side{width:370px}
+  .labwide .lab-topics{width:215px}
   .labwide .term-body{height:min(72vh,680px);font-size:.9rem}
   .labwide .term-title{font-size:.82rem}
   .labwide .lab-steps{max-height:min(62vh,600px)}
@@ -1039,6 +1050,7 @@ function labMode(){
   const v=$(`<div class="view labwide">${topBar()}<button class="back" id="lback">← Back</button><button class="iconbtn" id="lreset" style="margin-left:8px" title="Reset the lab to a clean state">↺ Reset lab</button>
     <div class="brand" style="margin-bottom:10px"><div class="logo">🧪</div><h1>Guided Lab</h1><p>Splunk Enterprise Data Administration — a safe, simulated lab environment</p></div>
     <div class="lablayout">
+      <aside class="lab-topics" id="labtopics"></aside>
       <div class="lab-main">
         <div class="term">
           <div class="term-hd"><span class="term-dot" style="background:#ff5f57"></span><span class="term-dot" style="background:#febc2e"></span><span class="term-dot" style="background:#28c840"></span><span class="term-title" id="labtitle">student@mgmt1</span></div>
@@ -1046,12 +1058,12 @@ function labMode(){
         </div>
         <div class="term-hint">Servers: <b>mgmt1</b> (jump host) · sh1 · hf1 · uf1 · uf2 · idx1 · idx2. Move around with <code>ssh uf1</code> / <code>exit</code>. Commands change the real (simulated) config — try <code>cat /opt/splunkforwarder/etc/system/local/outputs.conf</code> after adding a forward-server. ↑/↓ history.</div>
       </div>
-      <div class="lab-side" id="labside"></div>
+      <aside class="lab-side" id="labside"></aside>
     </div></div>`);
   wireTop(v);
   v.querySelector('#lback').onclick=examInfo;
   v.querySelector('#lreset').onclick=()=>{if(confirm('Reset the lab environment to a clean state? Your command history and progress will be cleared.'))labMode();};
-  const body=v.querySelector('#labbody'), side=v.querySelector('#labside'), title=v.querySelector('#labtitle');
+  const body=v.querySelector('#labbody'), side=v.querySelector('#labside'), title=v.querySelector('#labtitle'), topics=v.querySelector('#labtopics');
   const line=(html='')=>{const d=document.createElement('div');d.className='term-line';d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;};
   const hist=[]; let hi=-1;
   const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','search','install','display','http-event-collector','help'];
@@ -1059,19 +1071,21 @@ function labMode(){
   function finishTok(inp,pre,pfx,list){const p=pfx.toLowerCase();const hit=list.filter(x=>x.toLowerCase().startsWith(p));if(!hit.length)return;if(hit.length===1){inp.value=pre+hit[0]+' ';}else{let cp=hit[0];hit.forEach(x=>{while(cp&&!x.toLowerCase().startsWith(cp.toLowerCase()))cp=cp.slice(0,-1);});inp.value=pre+cp;if(cp.length<=pfx.length)line('<span class="dim">'+hit.join('   ')+'</span>');}}
   function completePath(inp,before,partial){let dir,pfx,dpref;if(partial.includes('/')){const i=partial.lastIndexOf('/');dpref=partial.slice(0,i+1);pfx=partial.slice(i+1);dir=resolve(dpref.replace(/\/$/,'')||'/');}else{dir=H().cwd;pfx=partial;dpref='';}if(!isDir(dir))return;const kids=children(dir).filter(k=>k.toLowerCase().startsWith(pfx.toLowerCase()));if(!kids.length)return;if(kids.length===1){const full=(dir==='/'?'':dir)+'/'+kids[0];inp.value=before+dpref+kids[0]+(isDir(full)?'/':' ');}else{let cp=kids[0];kids.forEach(k=>{while(cp&&!k.toLowerCase().startsWith(cp.toLowerCase()))cp=cp.slice(0,-1);});inp.value=before+dpref+cp;if(cp.length<=pfx.length)line('<span class="dim">'+kids.map(k=>{const full=(dir==='/'?'':dir)+'/'+k;return isDir(full)?k+'/':k;}).join('   ')+'</span>');}}
   function complete(inp){const val=inp.value;const mSub=val.match(/^(\s*splunk\s+)(\S*)$/);if(mSub){finishTok(inp,mSub[1],mSub[2],SUBS);return;}const toks=val.split(/\s+/);if(toks.length===1&&!/\s$/.test(val)){finishTok(inp,val.slice(0,val.length-toks[0].length),toks[0],CMDS);return;}if(/^(cat|more|head|tail|nano|vi|vim|cd|ls|grep|wc|rm)$/.test(toks[0])){const last=/\s$/.test(val)?'':toks[toks.length-1];completePath(inp,val.slice(0,val.length-last.length),last);}}
+  const stepsDone=(m)=>m.steps.map(st=>(st.test&&history.some(e=>st.test(e.host,e.cmd)))||(st.state&&st.state(LS))||false);
+  function renderTopics(){
+    topics.innerHTML=`<div class="lt-hd">Lab modules</div>`+MODULES.map((mm,i)=>{const dn=stepsDone(mm).filter(Boolean).length;const all=dn===mm.steps.length;return `<button class="lab-topic ${i===active?'on':''}" data-i="${i}"><span class="lt-name">${mm.name}</span>${all?'<span class="tdone">✓</span>':`<span class="tprog">${dn}/${mm.steps.length}</span>`}</button>`;}).join('');
+    topics.querySelectorAll('.lab-topic').forEach(b=>b.onclick=()=>{active=+b.dataset.i;refresh();});
+  }
   function renderSide(){
-    const m=MODULES[active];
-    const done=m.steps.map(st=>(st.test&&history.some(e=>st.test(e.host,e.cmd)))||(st.state&&st.state(LS))||false);
-    const dn=done.filter(Boolean).length;
-    side.innerHTML=`<div class="lab-mods">${MODULES.map((mm,i)=>`<button class="lab-mod ${i===active?'on':''}" data-i="${i}">${mm.name}</button>`).join('')}</div>
-      <div class="lab-card"><h4>📋 ${esc(m.name.replace(/^\d+ · /,''))}<span class="lab-prog">${dn}/${m.steps.length}</span></h4>
+    const m=MODULES[active];const done=stepsDone(m);const dn=done.filter(Boolean).length;
+    side.innerHTML=`<div class="lab-card"><h4>📋 ${esc(m.name.replace(/^[^·]*· /,''))}<span class="lab-prog">${dn}/${m.steps.length}</span></h4>
       <div style="padding:11px 14px;color:var(--muted);font-size:.8rem;line-height:1.5;border-bottom:1px solid var(--hair)">${esc(m.intro)}</div>
       <div class="lab-steps">${m.steps.map((st,i)=>`<div class="lab-step ${done[i]?'done':''}"><div class="box">${done[i]?'✓':i+1}</div><div><div class="lab-txt">${esc(st.t)}</div><code class="lab-cmd" data-c="${esc(st.c)}">${esc(st.c)}</code></div></div>`).join('')}</div></div>
-      ${dn===m.steps.length?`<div class="lab-done-banner">🎉 Module complete — every step verified. Try the next module above.</div>`:''}
+      ${dn===m.steps.length?`<div class="lab-done-banner">🎉 Module complete — every step verified. Pick the next module on the left.</div>`:''}
       <details class="lab-card" style="margin-top:10px"${dn===m.steps.length?' open':''}><summary style="padding:12px 14px;cursor:pointer;font-weight:700;font-size:.84rem;list-style:none;display:flex;align-items:center;gap:8px">📖 What this lab teaches</summary><div style="padding:0 14px 14px;color:var(--muted);font-size:.82rem;line-height:1.6">${ABOUT[m.id]||'Overview coming soon.'}</div></details>`;
-    side.querySelectorAll('.lab-mod').forEach(b=>b.onclick=()=>{active=+b.dataset.i;renderSide();});
     side.querySelectorAll('.lab-cmd').forEach(c=>c.onclick=()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp){inp.value=c.dataset.c;inp.focus();}});
   }
+  function refresh(){renderTopics();renderSide();}
   function openEditor(path,ed){
     const ap=absPath(path);
     const ov=document.createElement('div');ov.className='ed-overlay';
@@ -1081,7 +1095,7 @@ function labMode(){
     v.appendChild(ov);
     const ta=ov.querySelector('.ed-ta');ta.value=fileContent(path);ta.focus();try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(e){}
     const close=()=>{ov.remove();const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();};
-    const save=()=>{parseInto(path,ta.value);line(`<span class="ok">[ Wrote ${ta.value.split(/\n/).length} lines to ${esc(ap)} ]</span>`);renderSide();close();};
+    const save=()=>{parseInto(path,ta.value);line(`<span class="ok">[ Wrote ${ta.value.split(/\n/).length} lines to ${esc(ap)} ]</span>`);refresh();close();};
     ov.querySelector('.ed-save').onclick=save;
     ov.querySelector('.ed-cancel').onclick=close;
     ta.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='o'||e.key==='x')){e.preventDefault();save();}else if(e.key==='Escape'){e.preventDefault();save();}});
@@ -1094,7 +1108,7 @@ function labMode(){
     inp.addEventListener('keydown',e=>{
       if(e.key==='Enter'){const raw=inp.value;inp.disabled=true;hi=-1;const hostAt=LS.cur;row.innerHTML=`<span class="term-prompt">student@${hostAt}:~$</span> <span>${esc(raw)}</span>`;if(raw.trim())hist.push(raw);
         const out=run(raw);
-        if(raw.trim()){history.push({host:hostAt,cmd:normCmd(raw)});renderSide();}
+        if(raw.trim()){history.push({host:hostAt,cmd:normCmd(raw)});refresh();}
         if(out===null){newPrompt();return;} if(out!=='')line(out); newPrompt(); e.preventDefault();}
       else if(e.key==='ArrowUp'){if(hist.length){hi=hi<0?hist.length-1:Math.max(0,hi-1);inp.value=hist[hi];setTimeout(()=>inp.setSelectionRange(inp.value.length,inp.value.length),0);}e.preventDefault();}
       else if(e.key==='ArrowDown'){if(hi>=0){hi++;if(hi>=hist.length){hi=-1;inp.value='';}else inp.value=hist[hi];}e.preventDefault();}
@@ -1104,7 +1118,7 @@ function labMode(){
   }
   line(`<span class="cy">Splunk Data Admin — Guided Lab</span>. You are on <b>mgmt1</b> (the jump/management host).`);
   line(`<span class="dim">Pick a module on the right and follow the steps. Commands really change the (simulated) config. Type</span> <span class="ok">splunk help</span><span class="dim"> or click a command to insert it.</span>`);
-  renderSide();
+  refresh();
   newPrompt();
   body.addEventListener('click',()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
   show(v);
