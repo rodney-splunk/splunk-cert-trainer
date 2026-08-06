@@ -333,6 +333,23 @@
   .ed-keys b{color:#5ee0a0}
   .ed-btn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;box-shadow:none}
   .ed-btn.ghost{background:transparent;color:#cdd5e2;border:1px solid #3a4658}
+  /* Concept Mastery */
+  .concept{padding:0;overflow:hidden;margin-bottom:11px}
+  .concept>summary{list-style:none;cursor:pointer;padding:15px 17px;display:flex;align-items:center;gap:12px;font-weight:700}
+  .concept>summary::-webkit-details-marker{display:none}
+  .concept>summary::after{content:'▸';margin-left:auto;color:var(--muted);transition:transform .2s;font-size:.85rem}
+  .concept[open]>summary::after{transform:rotate(90deg)}
+  .concept .cico{font-size:1.35rem;flex-shrink:0}
+  .concept .ctitle{font-size:.98rem}
+  .concept .ctag{font-size:.68rem;color:var(--muted);font-weight:600;background:var(--card-solid);border:1px solid var(--hair);border-radius:20px;padding:2px 9px;white-space:nowrap}
+  .cbody{padding:2px 17px 17px;font-size:.9rem;line-height:1.62;color:var(--text)}
+  .cbody p{margin:10px 0}.cbody ul{margin:8px 0;padding-left:20px}.cbody li{margin:4px 0}
+  .cwhy{background:rgba(106,184,255,.1);border-left:3px solid var(--blue);border-radius:8px;padding:9px 12px;font-size:.85rem;margin-bottom:12px}
+  .cex{background:var(--card-solid);border:1px solid var(--hair);border-radius:10px;padding:11px 13px;font-family:ui-monospace,Menlo,monospace;font-size:.81rem;line-height:1.5;margin:12px 0;white-space:pre-wrap;overflow-x:auto}
+  .cgotcha{background:rgba(255,176,32,.12);border-left:3px solid var(--amber);border-radius:8px;padding:9px 12px;font-size:.85rem;margin:12px 0}
+  .ctable{width:100%;border-collapse:collapse;margin:10px 0;font-size:.83rem}
+  .ctable th,.ctable td{border:1px solid var(--hair);padding:7px 10px;text-align:left;vertical-align:top}
+  .ctable th{background:var(--card-solid);font-weight:700}
 </style>
 </head>
 <body>
@@ -540,6 +557,7 @@ function examInfo(){
     ${flaggedCount?`<div class="glass mode" data-m="flagged"><div class="mi">⚑</div><div><b>Flagged</b><p>Revisit the ${flaggedCount} question${flaggedCount>1?'s':''} you flagged.</p></div><div class="arr">›</div></div>`:''}
     <div class="glass mode" data-m="lab"><div class="mi">🧪</div><div><b>Guided Lab<span class="rectag">New</span></b><p>Hands-on data-admin labs: ssh between servers, run commands, auto-checked steps.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="terminal"><div class="mi">🖥️</div><div><b>CLI Lab</b><p>Free-play simulated Splunk admin terminal.</p></div><div class="arr">›</div></div>
+    <div class="glass mode" data-m="concepts"><div class="mi">📗</div><div><b>Concept Mastery<span class="rectag">New</span></b><p>Deep-dive explainers for the trickiest topics: precedence, priority, btool, licensing, HF vs UF.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="appendix"><div class="mi">📚</div><div><b>Appendix</b><p>Browse all ${aq.length} questions with answers.</p></div><div class="arr">›</div></div>`;
   const v=$(`<div class="view">${topBar()}
     <button class="back">← All exams</button>
@@ -588,6 +606,7 @@ function examInfo(){
     if(mode==='appendix'){appendix();return;}
     if(mode==='terminal'){terminalLab();return;}
     if(mode==='lab'){labMode();return;}
+    if(mode==='concepts'){conceptsScreen();return;}
     if(mode==='commands'){startCommandQuiz();return;}
     if(mode==='review'){reviewPicker();return;}
     if(mode==='challenge'){startQuiz('challenge',aq.filter(q=>q.hard).map(q=>q.id),shuf());return;}
@@ -744,7 +763,7 @@ function labMode(){
   currentRender=labMode; S.onKey=null; try{clearTimer();}catch(e){}
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // ---- simulated environment state ----
-  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],tcp:[],udp:[],scripts:[],hec:false,hectoken:null,fs:{},lic:'Enterprise',deploy:null},o);
+  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],tcp:[],udp:[],scripts:[],hec:false,hectoken:null,fs:{},tree:{},cwd:null,lic:'Enterprise',deploy:null},o);
   const LS={cur:'am1',stack:[],hosts:{
     am1:mk({home:'/opt/splunk',role:'Agent Management / Test Server',type:'ent',started:true,servername:'splunk01',mon:[{path:'/opt/log/www2/access.log',index:'test',st:'access_combined_wcookie'}]}),
     sh1:mk({home:'/opt/splunk',role:'Search Head',type:'sh',started:true,servername:'sh1'}),
@@ -755,7 +774,21 @@ function labMode(){
     idx2:mk({home:'/opt/splunk',role:'Indexer 2',type:'idx',started:true,listen:[9997],servername:'idx2'}),
   }};
   const H=()=>LS.hosts[LS.cur];
-  function absPath(p){if(!p)return p;return p[0]==='/'?p:H().home+'/'+p;}
+  const ACCESS=['192.168.10.24 - - [25/May/2027:10:30:01 -0700] "GET /product/A-1021 HTTP/1.1" 200 3244 "http://shop.example/cart" "Mozilla/5.0"',
+    '192.168.10.51 - - [25/May/2027:10:30:02 -0700] "POST /checkout HTTP/1.1" 200 512 "http://shop.example/cart" "Mozilla/5.0"',
+    '10.2.9.7 - - [25/May/2027:10:30:04 -0700] "GET /admin HTTP/1.1" 404 209 "-" "curl/8.1"',
+    '192.168.10.24 - - [25/May/2027:10:30:07 -0700] "GET /images/logo.png HTTP/1.1" 200 18211 "http://shop.example/" "Mozilla/5.0"',
+    '203.0.113.9 - - [25/May/2027:10:30:09 -0700] "GET /login HTTP/1.1" 401 173 "-" "python-requests/2.31"'].join('\n')+'\n';
+  Object.values(LS.hosts).forEach(h=>{h.cwd=h.home+'/bin';const D=p=>h.tree[p]={t:'d'};const F=(p,c)=>h.tree[p]={t:'f',c:c};
+    ['/','/opt','/var','/var/log','/opt/log','/opt/log/www2',h.home,h.home+'/bin',h.home+'/etc',h.home+'/etc/system',h.home+'/etc/system/local',h.home+'/etc/system/default',h.home+'/etc/system/README',h.home+'/etc/apps',h.home+'/etc/apps/search',h.home+'/etc/apps/search/local',h.home+'/etc/apps/search/default',h.home+'/etc/deployment-apps',h.home+'/var',h.home+'/var/log',h.home+'/var/log/splunk'].forEach(D);
+    h.tree[h.home+'/etc/apps/search/local/inputs.conf']={t:'f'};h.tree[h.home+'/etc/system/local/server.conf']={t:'f'};
+    if(/forwarder/.test(h.home)||/Heavy/.test(h.role))h.tree[h.home+'/etc/system/local/outputs.conf']={t:'f'};
+    F('/opt/log/www2/access.log',ACCESS);F(h.home+'/etc/splunk.version','VERSION=10.0.1\nBUILD=5a009d941268\nPRODUCT=splunk\n');F(h.home+'/etc/apps/search/default/app.conf','[install]\nstate = enabled\n\n[ui]\nis_visible = true\nlabel = Search & Reporting\n');});
+  function nrm(p){const st=[];p.split('/').forEach(s=>{if(s===''||s==='.')return;if(s==='..')st.pop();else st.push(s);});return '/'+st.join('/');}
+  function resolve(p){if(!p)return H().cwd;if(p==='~')return H().home;if(p[0]==='/')return nrm(p);return nrm(H().cwd+'/'+p);}
+  function isDir(p){const n=H().tree[p];return p==='/'||(n&&n.t==='d');}
+  function children(dir){const out=new Set();Object.keys(H().tree).forEach(k=>{if(k===dir||k==='/')return;const par=k.replace(/\/[^/]*$/,'')||'/';if(par===dir)out.add(k.slice(dir==='/'?1:dir.length+1));});return [...out].sort();}
+  function absPath(p){if(!p)return p;return p[0]==='/'?nrm(p):resolve(p);}
   function genFile(path){const h=H();
     if(/inputs\.conf$/.test(path)){let o='';h.mon.forEach(m=>o+=`[monitor://${m.path}]\ndisabled = false\nindex = ${m.index||'default'}\nsourcetype = ${m.st||'auto'}\n\n`);h.listen.forEach(p=>o+=`[splunktcp://${p}]\nconnection_host = ip\n\n`);h.tcp.forEach(t=>o+=`[tcp://${t.port}]\nsourcetype = ${t.st||'auto'}\n\n`);h.udp.forEach(t=>o+=`[udp://${t.port}]\nsourcetype = ${t.st||'auto'}\n\n`);h.scripts.forEach(s=>o+=`[script://${s.path}]\ninterval = ${s.interval||60}\nsourcetype = ${s.st||'auto'}\nindex = ${s.index||'default'}\n\n`);return o||'# inputs.conf — add stanzas like [monitor:///path], [tcp://514], [script://./bin/x.sh]\n';}
     if(/outputs\.conf$/.test(path)){if(!h.fwd.length)return '# outputs.conf — define [tcpout] and a server list to forward\n';return `[tcpout]\ndefaultGroup = default-autolb-group\n\n[tcpout:default-autolb-group]\ndisabled = false\nserver = ${h.fwd.join(',')}\n`;}
@@ -763,10 +796,13 @@ function labMode(){
     if(/props\.conf$/.test(path))return '# props.conf — e.g. [sourcetype]\\nTRANSFORMS-route = <transform_name>\n';
     if(/transforms\.conf$/.test(path))return '# transforms.conf — e.g. [setnull]\\nREGEX = .\\nDEST_KEY = queue\\nFORMAT = nullQueue\n';
     return '';}
-  function fileContent(path){const h=H();const ap=absPath(path);return (ap in h.fs)?h.fs[ap]:genFile(ap);}
-  function parseInto(path,text){const h=H();const ap=absPath(path);h.fs[ap]=text;
-    if(/outputs\.conf$/.test(ap)){const m=text.match(/^\s*server\s*=\s*(.+)$/mi);h.fwd=m?m[1].split(',').map(s=>s.trim()).filter(Boolean):[];}
-    if(/inputs\.conf$/.test(ap)){h.mon=[];h.listen=[];h.tcp=[];h.udp=[];h.scripts=[];text.split(/\n(?=\[)/).forEach(bl=>{const hd=bl.match(/^\[(monitor|splunktcp|tcp|udp|script):\/\/([^\]]+)\]/);if(!hd)return;const gv=k=>{const mm=bl.match(new RegExp('^\\s*'+k+'\\s*=\\s*(.+)$','mi'));return mm?mm[1].trim():undefined;};const kind=hd[1],val=hd[2];if(kind==='monitor')h.mon.push({path:val,index:gv('index')||'default',st:gv('sourcetype')||'auto'});else if(kind==='splunktcp')h.listen.push(+val);else if(kind==='tcp')h.tcp.push({port:val,st:gv('sourcetype')});else if(kind==='udp')h.udp.push({port:val,st:gv('sourcetype')});else if(kind==='script')h.scripts.push({path:val,interval:gv('interval'),st:gv('sourcetype'),index:gv('index')});});}}
+  function fileContent(path){const h=H();const ap=absPath(path);if(ap in h.fs)return h.fs[ap];const n=h.tree[ap];if(n){if(n.t==='d')return null;if(n.c!=null)return n.c;return genFile(ap);}if(/(inputs|outputs|server|props|transforms)\.conf$/.test(ap))return genFile(ap);return '';}
+  function parseInto(path,text){const h=H();const ap=absPath(path);let structured=false;
+    if(/outputs\.conf$/.test(ap)){structured=true;const m=text.match(/^\s*server\s*=\s*(.+)$/mi);h.fwd=m?m[1].split(',').map(s=>s.trim()).filter(Boolean):[];}
+    else if(/inputs\.conf$/.test(ap)){structured=true;h.mon=[];h.listen=[];h.tcp=[];h.udp=[];h.scripts=[];text.split(/\n(?=\[)/).forEach(bl=>{const hd=bl.match(/^\[(monitor|splunktcp|tcp|udp|script):\/\/([^\]]+)\]/);if(!hd)return;const gv=k=>{const mm=bl.match(new RegExp('^\\s*'+k+'\\s*=\\s*(.+)$','mi'));return mm?mm[1].trim():undefined;};const kind=hd[1],val=hd[2];if(kind==='monitor')h.mon.push({path:val,index:gv('index')||'default',st:gv('sourcetype')||'auto'});else if(kind==='splunktcp')h.listen.push(+val);else if(kind==='tcp')h.tcp.push({port:val,st:gv('sourcetype')});else if(kind==='udp')h.udp.push({port:val,st:gv('sourcetype')});else if(kind==='script')h.scripts.push({path:val,interval:gv('interval'),st:gv('sourcetype'),index:gv('index')});});}
+    else if(/server\.conf$/.test(ap)){structured=true;const m=text.match(/^\s*serverName\s*=\s*(.+)$/mi);if(m)h.servername=m[1].trim();}
+    if(structured)delete h.fs[ap];else h.fs[ap]=text;
+    h.tree[ap]={t:'f'};}
   const history=[]; // {host, cmd}
   // ---- guided modules ----
   const MODULES=[
@@ -825,6 +861,16 @@ function labMode(){
       {t:'Edit props.conf: reference the transform (TRANSFORMS-set = setnull) under the target sourcetype.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/transforms-/i.test(t))},
     ]},
   ];
+  const ABOUT={
+    m2:"Splunk reads <b>layered .conf files</b>: <code>local</code> overrides <code>default</code>, and in the global context <code>system/local</code> wins. <b>btool</b> prints the <b>merged, on-disk</b> config, and with <code>--debug</code> shows the exact file each setting came from — your #1 tool for &lsquo;where is this value coming from?&rsquo; You also saw the ports: <b>8000</b> Web, <b>8089</b> management, <b>8065</b> app server, <b>8191</b> KV store.",
+    m3:"A <b>receiver</b> must be enabled on the destination (<code>splunk enable listen 9997</code>) before a forwarder can connect. On the forwarder, <code>add forward-server</code> writes <b>outputs.conf</b> and <code>add monitor</code> writes <b>inputs.conf</b>. Internal logs flow right away; your monitored data flows once the input is added.",
+    m4:"Listing multiple servers in one <code>tcpout</code> group gives <b>automatic (time-based) load balancing</b> across indexers. A <b>heavy forwarder</b> can act as an <b>intermediate forwarder</b>: enable a receiving port on it and point downstream UFs at that port instead of the indexers.",
+    edit:"Config lives in <b>text files</b>. Editing <code>outputs.conf</code>/<code>inputs.conf</code> by hand is equivalent to the CLI <code>add</code> commands — both end up as stanzas Splunk reads. Always edit files under <code>local/</code>, never <code>default/</code>. Most manual edits need a <b>restart</b> to take effect.",
+    m6:"A <b>monitor</b> input continuously watches a file/dir and indexes new lines as they arrive (vs. <b>oneshot</b>, which reads once). <code>index</code> and <code>sourcetype</code> set where data lands and how it is parsed. <code>btool --debug</code> confirms the effective input and its source file.",
+    m7:"Splunk can listen directly on <b>TCP/UDP</b> ports (e.g. UDP <b>514</b> for syslog). Prefer doing this on a <b>heavy forwarder</b> or a dedicated syslog collector — not an indexer — and consider writing syslog to files for reliability. <code>sourcetype</code> tells Splunk how to parse the stream.",
+    m9:"The <b>HTTP Event Collector</b> is <b>agentless</b> ingestion: enable HEC, create a <b>token</b>, and apps POST events to port <b>8088</b> with that token in the Authorization header — no forwarder required.",
+    m14:"To drop noise at index time, a <b>transforms.conf</b> transform sets <code>DEST_KEY = queue</code> and <code>FORMAT = nullQueue</code>, and <b>props.conf</b> references it with <code>TRANSFORMS-&lt;name&gt;</code> under the sourcetype. This must run on a <b>parsing tier</b> (heavy forwarder or indexer) — a universal forwarder does not parse.",
+  };
   let active=0;
   // ---- command engine ----
   function normCmd(s){s=s.trim().replace(/\\\s*$/,'').trim();s=s.replace(/^(?:\/opt\/splunk(?:forwarder)?\/bin\/splunk|\.\/splunk|splunk)\b/,'splunk');return s.replace(/\s+/g,' ');}
@@ -866,6 +912,7 @@ function labMode(){
       case 'set':{if((r[0]||'')==='deploy-poll'){h.deploy=r[1]||'am1:8089';return `Configuration updated.`;}return `<span class="ok">Setting updated.</span>`;}
       case 'edit':{if((r[0]||'')==='licenser-groups'){if(/Forwarder/i.test(a.join(' '))){h.lic='Forwarder';return `The licenser-groups object has been edited.\n<span class="warn">You need to restart splunkd for changes to take effect.</span>`;}return `The licenser-groups object has been edited.`;}return `<span class="ok">Edited.</span>`;}
       case 'reload':return (r[0]==='deploy-server')?`Reloading serverclass(es)...  <span class="ok">Done.</span>`:`<span class="err">Nothing to reload for '${esc(r[0]||'')}'.</span>`;
+      case 'search':{const q=a.slice(1).join(' ').replace(/^['"]|['"]$/g,'');if(!q)return need("search '<SPL>'");if(/index=_internal/.test(q)&&/tstats|splunk_server/.test(q))return `<span class="dim"># ${esc(q)}</span>\nsplunk_server   count\nidx1            48213\nidx2            47190\nsh1             9922`;return `<span class="dim"># ${esc(q)}</span>\n_time                 host       source                        sourcetype                 status\n2027-05-25 10:30:02   ${h.servername.padEnd(9)}  /opt/log/www2/access.log      access_combined_wcookie    200\n2027-05-25 10:30:04   ${h.servername.padEnd(9)}  /opt/log/www2/access.log      access_combined_wcookie    404\n<span class="dim">(showing 2 of 1,842 matching events — simulated)</span>`;}
       default:return `<span class="err">Command '${esc(s)}' not found on the splunk CLI.</span> Type <span class="cy">splunk help</span>.`;
     }
   }
@@ -879,15 +926,17 @@ function labMode(){
     const norm=normCmd(t);
     if(/^splunk\b/.test(norm))return splunk(norm.split(' ').slice(1));
     if(cmd==='nano'||cmd==='vi'||cmd==='vim'){const f=parts[1];if(!f)return `<span class="err">usage: ${cmd} &lt;file&gt;</span>`;openEditor(f,cmd==='nano'?'nano':'vi');return null;}
-    if(cmd==='cat'){const f=parts[1]||'';if(!f)return `<span class="err">cat: missing operand</span>`;const c=fileContent(f);return c!==''?esc(c):`<span class="err">cat: ${esc(f)}: No such file or directory</span>`;}
-    if(cmd==='rm'){const f=parts[1]||'';if(/outputs\.conf$/.test(f)){H().fwd=[];return '';}return `<span class="dim">rm: ${esc(f)}: (simulated — only outputs.conf removal is modeled)</span>`;}
-    if(cmd==='ls')return `bin   etc   var   lib   README`;
-    if(cmd==='pwd')return `${H().home}/bin`;
-    if(cmd==='cd')return '';
+    if(cmd==='cat'||cmd==='more'||cmd==='head'||cmd==='tail'){const f=parts[1]||'';if(!f)return `<span class="err">${cmd}: missing operand</span>`;const c=fileContent(f);if(c===null)return `<span class="err">${cmd}: ${esc(f)}: Is a directory</span>`;if(c==='')return `<span class="err">${cmd}: ${esc(f)}: No such file or directory</span>`;let L=c.replace(/\n$/,'').split('\n');if(cmd==='head')L=L.slice(0,10);if(cmd==='tail')L=L.slice(-10);return esc(L.join('\n'));}
+    if(cmd==='grep'){const pat=parts[1],f=parts[2];if(!pat||!f)return `<span class="err">usage: grep &lt;pattern&gt; &lt;file&gt;</span>`;const c=fileContent(f)||'';let re;try{re=new RegExp(pat,'i');}catch(e){re=new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');}const hits=c.split('\n').filter(l=>re.test(l));return hits.length?esc(hits.join('\n')):'';}
+    if(cmd==='wc'){const f=parts[parts.length-1];const c=fileContent(f);if(c===''||c===null||c===undefined)return `<span class="err">wc: ${esc(f||'')}: No such file</span>`;const n=c.replace(/\n$/,'').split('\n').filter(x=>x!=='').length;return `  ${n}  ${esc(f)}`;}
+    if(cmd==='rm'){const f=parts[1]||'';const ap=absPath(f);if(/outputs\.conf$/.test(ap)){H().fwd=[];delete H().fs[ap];delete H().tree[ap];return '';}if(H().tree[ap]){delete H().tree[ap];delete H().fs[ap];return '';}return `<span class="err">rm: ${esc(f)}: No such file or directory</span>`;}
+    if(cmd==='ls'){const a2=parts.slice(1).filter(x=>x[0]!=='-');const long=/(^|\s)-l/.test(t);const dir=resolve(a2[0]||'.');if(H().tree[dir]&&H().tree[dir].t==='f')return esc(a2[0]);if(!isDir(dir))return `<span class="err">ls: ${esc(a2[0]||'')}: No such file or directory</span>`;const ks=children(dir);if(!ks.length)return '';return ks.map(k=>{const full=(dir==='/'?'':dir)+'/'+k;const d=isDir(full);return d?`<span class="cy">${esc(k)}/</span>`:esc(k);}).join(long?'\n':'   ');}
+    if(cmd==='pwd')return H().cwd;
+    if(cmd==='cd'){const tgt=resolve(parts[1]||'~');if(isDir(tgt)){H().cwd=tgt;return '';}return `<span class="err">cd: ${esc(parts[1]||'')}: Not a directory</span>`;}
     if(cmd==='whoami')return 'student';
     if(cmd==='echo')return esc(parts.slice(1).join(' '));
     if(cmd==='help'||cmd==='?')return splunk(['help']);
-    return `<span class="err">${esc(cmd)}: command not found.</span> This lab uses the <span class="cy">splunk</span> CLI plus <span class="cy">ssh / exit / cat / ls</span>.`;
+    return `<span class="err">${esc(cmd)}: command not found.</span> Try <span class="cy">ls</span>, <span class="cy">cd</span>, <span class="cy">cat</span>, <span class="cy">nano</span>, <span class="cy">ssh</span>, or <span class="cy">splunk help</span>.`;
   }
   // ---- view ----
   const v=$(`<div class="view">${topBar()}<button class="back" id="lback">← Back</button>
@@ -907,7 +956,11 @@ function labMode(){
   const body=v.querySelector('#labbody'), side=v.querySelector('#labside'), title=v.querySelector('#labtitle');
   const line=(html='')=>{const d=document.createElement('div');d.className='term-line';d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;};
   const hist=[]; let hi=-1;
-  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','http-event-collector','help'];
+  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','search','http-event-collector','help'];
+  const CMDS=['ls','cd','pwd','cat','more','head','tail','grep','wc','echo','whoami','clear','ssh','exit','nano','vi','vim','rm','splunk','help'];
+  function finishTok(inp,pre,pfx,list){const p=pfx.toLowerCase();const hit=list.filter(x=>x.toLowerCase().startsWith(p));if(!hit.length)return;if(hit.length===1){inp.value=pre+hit[0]+' ';}else{let cp=hit[0];hit.forEach(x=>{while(cp&&!x.toLowerCase().startsWith(cp.toLowerCase()))cp=cp.slice(0,-1);});inp.value=pre+cp;if(cp.length<=pfx.length)line('<span class="dim">'+hit.join('   ')+'</span>');}}
+  function completePath(inp,before,partial){let dir,pfx,dpref;if(partial.includes('/')){const i=partial.lastIndexOf('/');dpref=partial.slice(0,i+1);pfx=partial.slice(i+1);dir=resolve(dpref.replace(/\/$/,'')||'/');}else{dir=H().cwd;pfx=partial;dpref='';}if(!isDir(dir))return;const kids=children(dir).filter(k=>k.toLowerCase().startsWith(pfx.toLowerCase()));if(!kids.length)return;if(kids.length===1){const full=(dir==='/'?'':dir)+'/'+kids[0];inp.value=before+dpref+kids[0]+(isDir(full)?'/':' ');}else{let cp=kids[0];kids.forEach(k=>{while(cp&&!k.toLowerCase().startsWith(cp.toLowerCase()))cp=cp.slice(0,-1);});inp.value=before+dpref+cp;if(cp.length<=pfx.length)line('<span class="dim">'+kids.map(k=>{const full=(dir==='/'?'':dir)+'/'+k;return isDir(full)?k+'/':k;}).join('   ')+'</span>');}}
+  function complete(inp){const val=inp.value;const mSub=val.match(/^(\s*splunk\s+)(\S*)$/);if(mSub){finishTok(inp,mSub[1],mSub[2],SUBS);return;}const toks=val.split(/\s+/);if(toks.length===1&&!/\s$/.test(val)){finishTok(inp,val.slice(0,val.length-toks[0].length),toks[0],CMDS);return;}if(/^(cat|more|head|tail|nano|vi|vim|cd|ls|grep|wc|rm)$/.test(toks[0])){const last=/\s$/.test(val)?'':toks[toks.length-1];completePath(inp,val.slice(0,val.length-last.length),last);}}
   function renderSide(){
     const m=MODULES[active];
     const done=m.steps.map(st=>(st.test&&history.some(e=>st.test(e.host,e.cmd)))||(st.state&&st.state(LS))||false);
@@ -916,7 +969,8 @@ function labMode(){
       <div class="lab-card"><h4>📋 ${esc(m.name.replace(/^\d+ · /,''))}<span class="lab-prog">${dn}/${m.steps.length}</span></h4>
       <div style="padding:11px 14px;color:var(--muted);font-size:.8rem;line-height:1.5;border-bottom:1px solid var(--hair)">${esc(m.intro)}</div>
       <div class="lab-steps">${m.steps.map((st,i)=>`<div class="lab-step ${done[i]?'done':''}"><div class="box">${done[i]?'✓':i+1}</div><div><div class="lab-txt">${esc(st.t)}</div><code class="lab-cmd" data-c="${esc(st.c)}">${esc(st.c)}</code></div></div>`).join('')}</div></div>
-      ${dn===m.steps.length?`<div class="lab-done-banner">🎉 Module complete — every step verified. Try the next module above.</div>`:''}`;
+      ${dn===m.steps.length?`<div class="lab-done-banner">🎉 Module complete — every step verified. Try the next module above.</div>`:''}
+      <details class="lab-card" style="margin-top:10px"${dn===m.steps.length?' open':''}><summary style="padding:12px 14px;cursor:pointer;font-weight:700;font-size:.84rem;list-style:none;display:flex;align-items:center;gap:8px">📖 What this lab teaches</summary><div style="padding:0 14px 14px;color:var(--muted);font-size:.82rem;line-height:1.6">${ABOUT[m.id]||'Overview coming soon.'}</div></details>`;
     side.querySelectorAll('.lab-mod').forEach(b=>b.onclick=()=>{active=+b.dataset.i;renderSide();});
     side.querySelectorAll('.lab-cmd').forEach(c=>c.onclick=()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp){inp.value=c.dataset.c;inp.focus();}});
   }
@@ -946,7 +1000,7 @@ function labMode(){
         if(out===null){newPrompt();return;} if(out!=='')line(out); newPrompt(); e.preventDefault();}
       else if(e.key==='ArrowUp'){if(hist.length){hi=hi<0?hist.length-1:Math.max(0,hi-1);inp.value=hist[hi];setTimeout(()=>inp.setSelectionRange(inp.value.length,inp.value.length),0);}e.preventDefault();}
       else if(e.key==='ArrowDown'){if(hi>=0){hi++;if(hi>=hist.length){hi=-1;inp.value='';}else inp.value=hist[hi];}e.preventDefault();}
-      else if(e.key==='Tab'){const m=inp.value.match(/^(\s*splunk\s+)(\S*)$/);if(m){const pfx=m[2].toLowerCase();const hit=SUBS.filter(x=>x.startsWith(pfx));if(hit.length===1)inp.value=m[1]+hit[0]+' ';else if(hit.length>1){let cp=hit[0];hit.forEach(x=>{while(cp&&!x.startsWith(cp))cp=cp.slice(0,-1);});inp.value=m[1]+cp;}}e.preventDefault();}
+      else if(e.key==='Tab'){e.preventDefault();complete(inp);}
     });
     return inp;
   }
@@ -957,6 +1011,74 @@ function labMode(){
   body.addEventListener('click',()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
   show(v);
   requestAnimationFrame(()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
+}
+
+/* ============ CONCEPT MASTERY — deep-dive explainers ============ */
+function conceptsScreen(){
+  currentRender=conceptsScreen; S.onKey=null; try{clearTimer();}catch(e){}
+  const D='https://docs.splunk.com/Documentation/Splunk/latest/';
+  const CONCEPTS=[
+    {icon:'⚖️',title:'Config File Precedence',tag:'hardest',why:`There are <b>two</b> different orderings depending on context, and precedence decides which value actually &lsquo;wins&rsquo; when the same setting appears in multiple files.`,
+     body:`<p>The one rule that&rsquo;s always true: <b>within a directory, <code>local</code> beats <code>default</code></b>. Never edit <code>default/</code> — upgrades overwrite it. Put changes in <code>local/</code>.</p>
+     <p>Which <i>directory</i> wins depends on the context:</p>
+     <table class="ctable"><tr><th>Context</th><th>Order (highest → lowest)</th><th>Used for</th></tr>
+     <tr><td><b>Global</b></td><td>system/local → app local → app default → system/default</td><td>server.conf, indexes.conf, inputs/outputs on forwarders</td></tr>
+     <tr><td><b>App / user</b> (search-time)</td><td>user dir → current-app local → current-app default → other apps → system</td><td>savedsearches, props/transforms used at search time, macros</td></tr></table>
+     <p>Files merge <b>setting by setting</b> — a higher-precedence file overrides only the keys it defines; everything else falls through to lower files.</p>`,
+     example:`# global context example\n$SPLUNK_HOME/etc/system/local/server.conf   → serverName = splunk01   ✅ WINS\n$SPLUNK_HOME/etc/apps/foo/default/server.conf → serverName = foo        (loses)`,
+     gotcha:`Don&rsquo;t guess the winner — run <code>splunk btool &lt;conf&gt; list --debug</code> and it prints the source file of every effective setting.`,doc:D+'Admin/Wheretofindtheconfigurationfiles'},
+    {icon:'🎯',title:'Event Type Priority',tag:'counter-intuitive',why:`A <b>lower</b> priority number means a <b>higher</b> priority — the opposite of what most people assume.`,
+     body:`<p>Priority ranges <b>1 (best) to 10 (worst)</b>; the default is <b>5</b>. When one event matches multiple event types, Splunk orders them by priority and the <b>best (lowest-number) event type&rsquo;s color</b> is the one displayed. Only one color shows per event.</p>`,
+     example:`event matches:\n  critical_error  (priority 1)  ← WINS, its color displays\n  all_errors      (priority 5)`,
+     gotcha:`Priority <b>1 beats priority 10</b>. If colors aren&rsquo;t showing as expected, check the priority numbers.`,doc:D+'Knowledge/Abouteventtypes'},
+    {icon:'🔧',title:'btool',tag:'must-know',why:`It shows the <b>merged, on-disk</b> configuration — not the running config and not any single file — so people misread what it&rsquo;s telling them.`,
+     body:`<p>Syntax: <code>splunk btool &lt;conf&gt; list [stanza] [--debug]</code>. It merges every layer of a <code>.conf</code> and prints the effective result. Add <code>--debug</code> to prefix each line with the <b>file it came from</b>. <code>splunk btool check</code> validates configs for errors.</p>`,
+     example:`splunk btool inputs list --debug\n/opt/splunk/etc/apps/search/local/inputs.conf  [monitor:///opt/log/www2/access.log]\n/opt/splunk/etc/apps/search/local/inputs.conf  index = test\n/opt/splunk/etc/system/default/inputs.conf     _rcvbuf = 1572864`,
+     gotcha:`btool reads <b>files on disk</b>, not what&rsquo;s loaded in memory — after editing a file you must <b>restart</b> for Splunk to actually use it.`,doc:D+'Troubleshooting/Usebtooltotroubleshootconfigurations'},
+    {icon:'📥',title:'inputs.conf',tag:'core',why:`One file, many stanza types — and it&rsquo;s easy to confuse what belongs in inputs.conf vs outputs.conf.`,
+     body:`<p><b>inputs.conf</b> defines what data Splunk <b>collects</b>, by stanza type:</p>
+     <ul><li><code>[monitor://&lt;path&gt;]</code> — watch a file/dir</li><li><code>[splunktcp://9997]</code> — <b>receive</b> from forwarders (created by <code>splunk enable listen 9997</code>)</li><li><code>[tcp://&lt;port&gt;]</code> / <code>[udp://514]</code> — network inputs (e.g. syslog)</li><li><code>[script://&lt;path&gt;]</code> — scripted input</li></ul>
+     <p>Common attributes: <code>index</code>, <code>sourcetype</code>, <code>host</code>, <code>disabled</code>.</p>`,
+     example:`[monitor:///var/log/secure]\ndisabled = false\nindex = os\nsourcetype = linux_secure`,
+     gotcha:`On a forwarder, <b>inputs.conf = what to collect</b>, <b>outputs.conf = where to send</b>. Mixing them up is a classic exam trap.`,doc:D+'Data/Monitorfilesanddirectories'},
+    {icon:'📜',title:'Licensing',tag:'high-weight',why:`Several license types, a manager/peer split, and a specific violation rule that&rsquo;s easy to misremember.`,
+     body:`<table class="ctable"><tr><th>Type</th><th>Notes</th></tr>
+     <tr><td><b>Enterprise</b></td><td>Licensed daily <b>indexing volume</b></td></tr>
+     <tr><td><b>Free</b></td><td><b>500 MB/day</b>; disables auth, alerting, distributed search, clustering</td></tr>
+     <tr><td><b>Forwarder</b></td><td>Unlimited forwarding, no indexing</td></tr>
+     <tr><td><b>Trial</b></td><td>60-day Enterprise, then reverts to Free</td></tr></table>
+     <p>The <b>license manager</b> holds the license; indexers are <b>license peers</b> that report daily usage to it. An Enterprise <b>violation</b> = more than <b>5 warnings</b> in a rolling <b>30-day</b> window.</p>`,
+     gotcha:`License is measured on data <b>indexed per day</b>, not stored. Lower it by <b>filtering at ingest</b> (nullQueue / Ingest Actions) — deleting old data does nothing.`,doc:D+'Admin/HowSplunklicensingworks'},
+    {icon:'🔀',title:'Heavy vs Universal Forwarder',tag:'always-tested',why:`They look similar but differ in one decisive way: whether they parse.`,
+     body:`<table class="ctable"><tr><th></th><th>Universal Forwarder</th><th>Heavy Forwarder</th></tr>
+     <tr><td>What it is</td><td>Lightweight agent</td><td>Full Splunk Enterprise (forwarding mode)</td></tr>
+     <tr><td>Parses data?</td><td><b>No</b> — forwards mostly raw</td><td><b>Yes</b> — parse, filter, route</td></tr>
+     <tr><td>Footprint / Web UI</td><td>Tiny / none</td><td>Large / has UI</td></tr>
+     <tr><td>Can index/search?</td><td>No</td><td>Yes (but usually just forwards)</td></tr></table>
+     <p>Use a <b>UF by default</b> (scale, low overhead). Use an <b>HF</b> only when you need to <b>parse/filter/route before indexing</b> (e.g. nullQueue routing) or run inputs that require a full instance (DB Connect, some TAs).</p>`,
+     gotcha:`<b>Parsing happens on an HF or indexer, never a UF.</b> That single fact answers most HF-vs-UF questions.`,doc:D+'Forwarder/Abouttheuniversalforwarder'},
+    {icon:'🗄️',title:'Bucket Lifecycle & Retention',tag:'core',why:`Four bucket states plus two independent limits (age and size) that both trigger freezing.`,
+     body:`<p>Buckets age <b>hot → warm → cold → frozen</b>. Only <b>hot</b> is writable; warm and cold are read-only but searchable (cold usually on cheaper storage). <b>Frozen</b> means the data <b>leaves the index</b>.</p>
+     <ul><li><code>frozenTimePeriodInSecs</code> — freeze by <b>age</b></li><li><code>maxTotalDataSizeMB</code> — freeze by <b>size</b> (oldest first)</li></ul>
+     <p>Whichever limit is hit <b>first</b> wins.</p>`,
+     gotcha:`Frozen data is <b>deleted by default</b> — set <code>coldToFrozenDir</code> to archive it instead.`,doc:D+'Indexer/HowSplunkstoresindexes'},
+    {icon:'📡',title:'Deployment Server & Server Classes',tag:'admin',why:`Several moving parts (clients, apps, server classes) and a precedence catch that breaks central management.`,
+     body:`<p>The <b>deployment server</b> pushes <b>deployment apps</b> (staged in <code>etc/deployment-apps</code>) to <b>deployment clients</b> — forwarders that poll it (<code>splunk set deploy-poll mgr:8089</code>). A <b>server class</b> groups clients by filters and maps them to the apps they should receive. <code>splunk reload deploy-server</code> applies changes; clients pull on their next <b>phone-home</b>.</p>`,
+     gotcha:`Settings in a client&rsquo;s <code>system/local</code> can&rsquo;t be overridden by a deployed app (system/local wins) — that&rsquo;s why you <b>delete the local outputs.conf</b> before managing forwarders centrally.`,doc:D+'Updating/Aboutdeploymentserver'},
+    {icon:'⏱️',title:'Index-time vs Search-time',tag:'best-practice',why:`Deciding when a field is created affects storage, flexibility, and whether you can change it later.`,
+     body:`<p><b>Index-time</b> (baked in at ingest): <code>host</code>, <code>source</code>, <code>sourcetype</code>, <code>_time</code>, and index-time extractions. Costly and <b>permanent</b> — changing them requires re-indexing.</p>
+     <p><b>Search-time</b> (applied when you search): most field extractions, field aliases, calculated fields, lookups, event types, tags. Flexible — change any time, no re-index.</p>`,
+     gotcha:`<b>Prefer search-time.</b> Index-time extractions bloat the index and can&rsquo;t be applied retroactively to already-indexed data.`,doc:D+'Knowledge/Aboutfields'},
+  ];
+  const cards=CONCEPTS.map(c=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span><span class="ctag">${c.tag}</span></summary>
+    <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div></div></details>`).join('');
+  const v=$(`<div class="view">${topBar()}<button class="back" id="cback">← Back</button>
+    <div class="brand" style="margin-bottom:12px"><div class="logo">📗</div><h1>Concept Mastery</h1><p>The topics that trip everyone up — expanded until they click</p></div>
+    <p style="color:var(--muted);font-size:.84rem;margin:-4px 0 14px">Tap a topic to expand. Each has the concept, a worked example, the classic gotcha, and a link to the docs.</p>
+    ${cards}</div>`);
+  wireTop(v);
+  v.querySelector('#cback').onclick=examInfo;
+  show(v);
 }
 
 /* ============ QUIZ engine ============ */
