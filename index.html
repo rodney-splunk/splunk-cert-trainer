@@ -302,6 +302,26 @@
   .term-hint{margin-top:10px;color:var(--muted);font-size:.8rem;line-height:1.6}
   .term-hint code{background:var(--card);border:1px solid var(--hair);border-radius:6px;padding:1px 6px;font-size:.82em;cursor:pointer}
   .term-hint code:hover{border-color:var(--accent);color:var(--text)}
+  /* Guided Lab */
+  .lablayout{display:flex;gap:14px;align-items:flex-start}
+  .lab-main{flex:1;min-width:0}
+  .lab-side{width:300px;flex-shrink:0}
+  @media(max-width:900px){.lablayout{flex-direction:column}.lab-side{width:100%;order:2}}
+  .lab-mods{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .lab-mod{background:var(--card);border:1px solid var(--hair);color:var(--text);border-radius:10px;padding:7px 11px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;box-shadow:none}
+  .lab-mod.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .lab-card{border:1px solid var(--hair);border-radius:14px;background:var(--card);overflow:hidden}
+  .lab-card h4{margin:0;padding:12px 14px;font-size:.86rem;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:8px}
+  .lab-prog{margin-left:auto;font-size:.74rem;color:var(--muted);font-weight:600}
+  .lab-steps{max-height:min(52vh,420px);overflow-y:auto}
+  .lab-step{display:flex;gap:10px;padding:10px 13px;border-bottom:1px solid var(--hair);font-size:.83rem;line-height:1.45}
+  .lab-step:last-child{border-bottom:0}
+  .lab-step .box{flex-shrink:0;width:19px;height:19px;border-radius:6px;border:1.5px solid var(--hair);display:flex;align-items:center;justify-content:center;font-size:.7rem;margin-top:1px}
+  .lab-step.done .box{background:var(--green);border-color:var(--green);color:#052a17}
+  .lab-step.done .lab-txt{color:var(--muted);text-decoration:line-through}
+  .lab-cmd{display:inline-block;margin-top:4px;font-family:ui-monospace,Menlo,monospace;font-size:.78em;color:var(--accent2);background:var(--card-solid);border:1px solid var(--hair);border-radius:6px;padding:1px 6px;cursor:pointer}
+  .lab-cmd:hover{border-color:var(--accent)}
+  .lab-done-banner{margin-top:10px;padding:11px 14px;border-radius:12px;background:rgba(51,209,122,.14);border:1px solid rgba(51,209,122,.4);color:var(--green);font-weight:700;font-size:.86rem}
 </style>
 </head>
 <body>
@@ -507,7 +527,8 @@ function examInfo(){
     ${bank==='power'?`<div class="glass mode" data-m="review"><div class="mi">📖</div><div><b>Rapid Review</b><p>${REVIEW.length} quick facts, grouped by topic.</p></div><div class="arr">›</div></div>`:''}
     <div class="glass mode ${hasMissed?'':'dis'}" data-m="missed"><div class="mi">🔁</div><div><b>Review Missed</b><p>${hasMissed?`Re-quiz the ones you've missed.`:'Take a quiz first to unlock.'}</p></div>${hasMissed?'<div class="arr">›</div>':''}</div>
     ${flaggedCount?`<div class="glass mode" data-m="flagged"><div class="mi">⚑</div><div><b>Flagged</b><p>Revisit the ${flaggedCount} question${flaggedCount>1?'s':''} you flagged.</p></div><div class="arr">›</div></div>`:''}
-    <div class="glass mode" data-m="terminal"><div class="mi">🖥️</div><div><b>CLI Lab<span class="rectag">New</span></b><p>Practice real Splunk admin commands in a simulated terminal.</p></div><div class="arr">›</div></div>
+    <div class="glass mode" data-m="lab"><div class="mi">🧪</div><div><b>Guided Lab<span class="rectag">New</span></b><p>Hands-on data-admin labs: ssh between servers, run commands, auto-checked steps.</p></div><div class="arr">›</div></div>
+    <div class="glass mode" data-m="terminal"><div class="mi">🖥️</div><div><b>CLI Lab</b><p>Free-play simulated Splunk admin terminal.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="appendix"><div class="mi">📚</div><div><b>Appendix</b><p>Browse all ${aq.length} questions with answers.</p></div><div class="arr">›</div></div>`;
   const v=$(`<div class="view">${topBar()}
     <button class="back">← All exams</button>
@@ -555,6 +576,7 @@ function examInfo(){
     if(mode==='resume'){resumeQuiz();return;}
     if(mode==='appendix'){appendix();return;}
     if(mode==='terminal'){terminalLab();return;}
+    if(mode==='lab'){labMode();return;}
     if(mode==='commands'){startCommandQuiz();return;}
     if(mode==='review'){reviewPicker();return;}
     if(mode==='challenge'){startQuiz('challenge',aq.filter(q=>q.hard).map(q=>q.id),shuf());return;}
@@ -702,6 +724,166 @@ Tip: real commands prompt for admin credentials; that step is simulated here.`;}
   // click a hint chip to run it; click anywhere in the body to focus the input
   body.addEventListener('click',()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
   v.querySelectorAll('.term-hint code').forEach(c=>c.onclick=()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp){inp.value=c.textContent;inp.focus();}});
+  show(v);
+  requestAnimationFrame(()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
+}
+
+/* ============ GUIDED LAB — stateful multi-host data-admin lab ============ */
+function labMode(){
+  currentRender=labMode; S.onKey=null; try{clearTimer();}catch(e){}
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // ---- simulated environment state ----
+  const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],lic:'Enterprise',deploy:null},o);
+  const LS={cur:'am1',stack:[],hosts:{
+    am1:mk({home:'/opt/splunk',role:'Agent Management / Test Server',type:'ent',started:true,servername:'splunk01',mon:[{path:'/opt/log/www2/access.log',index:'test',st:'access_combined_wcookie'}]}),
+    sh1:mk({home:'/opt/splunk',role:'Search Head',type:'sh',started:true,servername:'sh1'}),
+    hf1:mk({home:'/opt/splunk',role:'Heavy Forwarder 1',type:'hf',servername:'hf1'}),
+    uf1:mk({home:'/opt/splunkforwarder',role:'Universal Forwarder 1',type:'uf',lic:'Forwarder',servername:'uf1'}),
+    uf2:mk({home:'/opt/splunkforwarder',role:'Universal Forwarder 2',type:'uf',lic:'Forwarder',servername:'uf2'}),
+    idx1:mk({home:'/opt/splunk',role:'Indexer 1',type:'idx',started:true,listen:[9997],servername:'idx1'}),
+    idx2:mk({home:'/opt/splunk',role:'Indexer 2',type:'idx',started:true,listen:[9997],servername:'idx2'}),
+  }};
+  const H=()=>LS.hosts[LS.cur];
+  const history=[]; // {host, cmd}
+  // ---- guided modules ----
+  const MODULES=[
+    {id:'m2',name:'2 · Config Files & btool',intro:'On am1, inspect Splunk settings from the CLI and find where the running config comes from.',steps:[
+      {t:'Check the Splunk service status on am1.',c:'splunk status',test:(h,c)=>h==='am1'&&/^splunk status\b/.test(c)},
+      {t:'Show the Splunk version.',c:'splunk version',test:(h,c)=>h==='am1'&&/^splunk version\b/.test(c)},
+      {t:'Show the Splunk Web port.',c:'splunk show web-port',test:(h,c)=>h==='am1'&&/^splunk show web-port\b/.test(c)},
+      {t:'Show the management (splunkd) port.',c:'splunk show splunkd-port',test:(h,c)=>h==='am1'&&/^splunk show splunkd-port\b/.test(c)},
+      {t:'Use btool --debug to see where the [general] server settings come from.',c:'splunk btool server list general --debug',test:(h,c)=>h==='am1'&&/^splunk btool server list general\b/.test(c)&&/--debug/.test(c)},
+      {t:'View the access.log input config with btool --debug (note the source files).',c:'splunk btool inputs list --debug',test:(h,c)=>h==='am1'&&/^splunk btool inputs list\b/.test(c)&&/--debug/.test(c)},
+    ]},
+    {id:'m3',name:'3 · Configure Forwarders',intro:'Enable receiving on am1, then start UF1, point it at am1, and add a monitor.',steps:[
+      {t:'On am1, enable a receiving port on 9997.',c:'splunk enable listen 9997',test:(h,c)=>h==='am1'&&/^splunk enable listen 9997\b/.test(c)},
+      {t:'SSH from am1 into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+      {t:'Start Splunk on UF1 (accept the license).',c:'splunk start --accept-license',test:(h,c)=>h==='uf1'&&/^splunk start\b/.test(c)},
+      {t:'Configure UF1 to forward to am1:9997.',c:'splunk add forward-server am1:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server am1:9997\b/.test(c)},
+      {t:'Verify UF1 is forwarding.',c:'splunk list forward-server',test:(h,c)=>h==='uf1'&&/^splunk list forward-server\b/.test(c)},
+      {t:'Add a monitor for access.log on UF1 (index test, sourcetype access_combined_wcookie).',c:'splunk add monitor /opt/log/www2/access.log -index test -sourcetype access_combined_wcookie',test:(h,c)=>h==='uf1'&&/^splunk add monitor \/opt\/log\/www2\/access\.log\b/.test(c)&&/-index\s+test/.test(c)},
+      {t:'Return to am1.',c:'exit',test:(h,c)=>h==='uf1'&&c==='exit'},
+    ]},
+    {id:'m4',name:'4 · Customize Forwarders',intro:'Load-balance UF1 across both indexers, then make HF1 an intermediate forwarder for UF2.',steps:[
+      {t:'On UF1 (ssh uf1), remove am1 as a forward-server.',c:'splunk remove forward-server am1:9997',test:(h,c)=>h==='uf1'&&/^splunk remove forward-server am1:9997\b/.test(c)},
+      {t:'Point UF1 at idx1:9997.',c:'splunk add forward-server idx1:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server idx1:9997\b/.test(c)},
+      {t:'Point UF1 at idx2:9997 (now load-balancing across both indexers).',c:'splunk add forward-server idx2:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server idx2:9997\b/.test(c)},
+      {t:'On HF1 (ssh hf1), enable an intermediate receiving port 9901.',c:'splunk enable listen 9901',test:(h,c)=>h==='hf1'&&/^splunk enable listen 9901\b/.test(c)},
+      {t:'On UF2 (ssh uf2), start Splunk.',c:'splunk start --accept-license',test:(h,c)=>h==='uf2'&&/^splunk start\b/.test(c)},
+      {t:'Configure UF2 to forward to the intermediate forwarder hf1:9901.',c:'splunk add forward-server hf1:9901',test:(h,c)=>h==='uf2'&&/^splunk add forward-server hf1:9901\b/.test(c)},
+    ]},
+  ];
+  let active=0;
+  // ---- command engine ----
+  function normCmd(s){s=s.trim().replace(/\\\s*$/,'').trim();s=s.replace(/^(?:\/opt\/splunk(?:forwarder)?\/bin\/splunk|\.\/splunk|splunk)\b/,'splunk');return s.replace(/\s+/g,' ');}
+  function conf(kind){const h=H();const p=h.home+'/etc/apps/search/local/'+kind;return p;}
+  function inputsText(){const h=H();let out='';h.mon.forEach(m=>{out+=`[monitor://${m.path}]\ndisabled = false\nindex = ${m.index||'default'}\nsourcetype = ${m.st||'auto'}\n`;});h.listen.forEach(p=>{out+=`[splunktcp://${p}]\nconnection_host = ip\n`;});return out||'<span class="dim"># (no local inputs configured)</span>';}
+  function outputsText(){const h=H();if(!h.fwd.length)return '<span class="dim"># (no outputs.conf — not forwarding)</span>';return `[tcpout]\ndefaultGroup = default-autolb-group\n[tcpout:default-autolb-group]\ndisabled = false\nserver = ${h.fwd.join(',')}`;}
+  function need(u){return `<span class="err">Argument required.</span>\nUsage: <span class="cy">splunk ${u}</span>`;}
+  function splunk(a){
+    const s=(a[0]||'').toLowerCase(),r=a.slice(1),h=H();
+    switch(s){
+      case '':case 'help':return `<span class="cy">Splunk CLI</span> — try: <span class="ok">status  version  show web-port  enable listen 9997  add forward-server &lt;h:port&gt;  list forward-server  add monitor &lt;path&gt; -index x -sourcetype y  btool &lt;conf&gt; list --debug  restart</span>\nMove between servers with <span class="ok">ssh uf1|uf2|hf1|idx1|idx2</span> and <span class="ok">exit</span>.`;
+      case 'status':return h.started?`splunkd is <span class="ok">running</span> (PID: 4271).\nsplunk helpers are <span class="ok">running</span> (PIDs: 4290, 4322).`:`splunkd is <span class="err">not running</span>.\nStart it with <span class="cy">splunk start</span>.`;
+      case 'version':return `Splunk 10.0.1 (build 5a009d941268)`;
+      case 'start':h.started=true;return `<span class="dim">Checking prerequisites... Done</span>\nStarting splunk server daemon (splunkd)...  <span class="ok">Done</span>${a.join(' ').includes('accept-license')?'\n<span class="dim">License accepted.</span>':''}`;
+      case 'restart':return h.started?`Stopping splunkd...\n<span class="ok">Done.</span>\nStarting splunkd...  <span class="ok">Done</span>`:`splunkd not running; starting...  <span class="ok">Done</span>`;
+      case 'stop':h.started=false;return `Stopping splunkd...\n<span class="ok">Done.</span>`;
+      case 'enable':{if((r[0]||'')==='listen'){const p=+r[1];if(!p)return need('enable listen <port>');if(!h.listen.includes(p))h.listen.push(p);return `Listening for Splunk data on TCP port ${p}.`;}if((r[0]||'')==='boot-start')return `<span class="ok">Init script installed.</span>`;return `<span class="err">Unknown 'enable' target.</span> Try: splunk enable listen <port>`;}
+      case 'disable':{if((r[0]||'')==='listen'){const p=+r[1];h.listen=h.listen.filter(x=>x!==p);return `Disabled listening on TCP port ${p}.`;}return `<span class="err">Unknown 'disable' target.</span>`;}
+      case 'add':{const w=(r[0]||'').toLowerCase(),b=r.slice(1);
+        if(w==='forward-server'){if(!b[0])return need('add forward-server <host>:<port>');if(!h.fwd.includes(b[0]))h.fwd.push(b[0]);return `Added forwarding to: ${esc(b[0])}.`;}
+        if(w==='monitor'){if(!b[0])return need('add monitor <path> [-index x] [-sourcetype y]');const gi=b.indexOf('-index'),gs=b.indexOf('-sourcetype');h.mon.push({path:b[0],index:gi>-1?b[gi+1]:'default',st:gs>-1?b[gs+1]:'auto'});return `<span class="ok">Added monitor of '${esc(b[0])}'.</span>`;}
+        return `<span class="err">Unknown 'add' object '${esc(r[0]||'')}'.</span>`;}
+      case 'remove':{if((r[0]||'').toLowerCase()==='forward-server'){const t=r[1];const before=h.fwd.length;h.fwd=h.fwd.filter(x=>x!==t);return before>h.fwd.length?`Removed forwarding to: ${esc(t)}.`:`<span class="warn">${esc(t||'')} was not a configured forward-server.</span>`;}return `<span class="err">Unknown 'remove' object.</span>`;}
+      case 'list':{const w=(r[0]||'').toLowerCase();
+        if(w==='forward-server'||w==='forward-servers')return h.fwd.length?`Active forwards:\n${h.fwd.map(f=>'    '+esc(f)+' <span class="ok">(active)</span>').join('\n')}\nConfigured but inactive forwards:\n    None`:`Active forwards:\n    None\nConfigured but inactive forwards:\n    None`;
+        if(w==='monitor'||w==='inputstatus'){const extra=h.mon.map(m=>'    '+m.path).join('\n');return `Monitored Directories:\n    ${h.home}/var/log/splunk\nMonitored Files:\n    ${h.home}/etc/splunk.version${extra?'\n'+extra:''}`;}
+        if(w==='licenser-groups'||w==='licenses')return `Enterprise\n  is_active:${h.lic==='Enterprise'?1:0}\nForwarder\n  is_active:${h.lic==='Forwarder'?1:0}\nFree\n  is_active:0`;
+        return `<span class="err">Unknown object '${esc(r[0]||'')}'.</span> Try: splunk list forward-server|monitor|licenser-groups`;}
+      case 'btool':{const conf=r[0];if(conf==='check')return `<span class="ok">Configuration files validated — no errors found.</span>`;if(!conf)return need('btool <conf> list [--debug]');const dbg=r.includes('--debug');const sp=(f)=>dbg?`<span class="dim">${h.home}/etc/${f}</span> `:'';
+        if(conf==='inputs'){let o='';h.mon.forEach(m=>{o+=`${sp('apps/search/local/inputs.conf')}[monitor://${m.path}]\n${sp('apps/search/local/inputs.conf')}disabled = false\n${sp('system/default/inputs.conf')}_rcvbuf = 1572864\n${sp('system/local/inputs.conf')}host = ${h.servername}\n${sp('apps/search/local/inputs.conf')}index = ${m.index}\n${sp('apps/search/local/inputs.conf')}sourcetype = ${m.st}\n`;});h.listen.forEach(p=>{o+=`${sp('apps/search/local/inputs.conf')}[splunktcp://${p}]\n${sp('apps/search/local/inputs.conf')}connection_host = ip\n`;});return o||'<span class="dim"># no matching inputs</span>';}
+        if(conf==='outputs'){if(!h.fwd.length)return '<span class="dim"># no outputs configured</span>';return `${sp('system/local/outputs.conf')}[tcpout:default-autolb-group]\n${sp('system/local/outputs.conf')}disabled = false\n${sp('system/local/outputs.conf')}server = ${h.fwd.join(',')}`;}
+        if(conf==='server')return `${sp('system/default/server.conf')}[general]\n${sp('system/local/server.conf')}serverName = ${h.servername}\n${sp('system/default/server.conf')}sessionTimeout = 1h`;
+        return `<span class="dim"># merged ${esc(conf)}.conf (add --debug for source files)</span>`;}
+      case 'show':{const w=(r[0]||'').toLowerCase();const map={'web-port':'Web port: 8000','splunkd-port':'Splunkd port: 8089','appserver-ports':'Application server ports on loopback interface: 8065','kvstore-port':'KV Store port: 8191','servername':'Server name: '+h.servername,'default-hostname':'Default hostname for data inputs: '+h.servername};if(map[w])return map[w];if(w==='config'){return splunk(['btool','server','list','general','--debug']);}return `<span class="dim">show ${esc(r[0]||'')} — not simulated.</span>`;}
+      case 'set':{if((r[0]||'')==='deploy-poll'){h.deploy=r[1]||'am1:8089';return `Configuration updated.`;}return `<span class="ok">Setting updated.</span>`;}
+      case 'edit':{if((r[0]||'')==='licenser-groups'){if(/Forwarder/i.test(a.join(' '))){h.lic='Forwarder';return `The licenser-groups object has been edited.\n<span class="warn">You need to restart splunkd for changes to take effect.</span>`;}return `The licenser-groups object has been edited.`;}return `<span class="ok">Edited.</span>`;}
+      case 'reload':return (r[0]==='deploy-server')?`Reloading serverclass(es)...  <span class="ok">Done.</span>`:`<span class="err">Nothing to reload for '${esc(r[0]||'')}'.</span>`;
+      default:return `<span class="err">Command '${esc(s)}' not found on the splunk CLI.</span> Type <span class="cy">splunk help</span>.`;
+    }
+  }
+  function run(raw){
+    const t=raw.trim(); if(!t)return '';
+    let parts=t.split(/\s+/),cmd=parts[0];
+    if(cmd==='sudo'){parts.shift();cmd=parts[0]||'';}
+    if(cmd==='clear'||cmd==='cls'){body.innerHTML='';return null;}
+    if(cmd==='ssh'){const tgt=parts[1];if(!tgt)return `<span class="err">usage: ssh &lt;host&gt;</span>`;if(!LS.hosts[tgt])return `<span class="err">ssh: could not resolve hostname ${esc(tgt)}: Name or service not known</span>`;if(tgt===LS.cur)return `<span class="warn">Already on ${esc(tgt)}.</span>`;LS.stack.push(LS.cur);LS.cur=tgt;const h=H();return `<span class="dim">Warning: Permanently added '${esc(tgt)}' to the list of known hosts.</span>\nWelcome to ${h.role} (${esc(tgt)}).\n<span class="dim">SPLUNK_HOME=${h.home}${h.started?'':'  — splunkd not started (run: splunk start --accept-license)'}</span>`;}
+    if(cmd==='exit'||cmd==='logout'){if(LS.stack.length){const from=LS.cur;LS.cur=LS.stack.pop();return `<span class="dim">Connection to ${esc(from)} closed.</span>`;}return `<span class="warn">You are on am1 (the jump host). Use the ← Back button to leave the lab.</span>`;}
+    const norm=normCmd(t);
+    if(/^splunk\b/.test(norm))return splunk(norm.split(' ').slice(1));
+    if(cmd==='cat'){const f=parts[1]||'';if(/inputs\.conf$/.test(f))return inputsText();if(/outputs\.conf$/.test(f))return outputsText();if(/server\.conf$/.test(f))return `[general]\nserverName = ${H().servername}`;if(!f)return `<span class="err">cat: missing operand</span>`;return `<span class="err">cat: ${esc(f)}: No such file or directory</span>`;}
+    if(cmd==='rm'){const f=parts[1]||'';if(/outputs\.conf$/.test(f)){H().fwd=[];return '';}return `<span class="dim">rm: ${esc(f)}: (simulated — only outputs.conf removal is modeled)</span>`;}
+    if(cmd==='ls')return `bin   etc   var   lib   README`;
+    if(cmd==='pwd')return `${H().home}/bin`;
+    if(cmd==='cd')return '';
+    if(cmd==='whoami')return 'student';
+    if(cmd==='echo')return esc(parts.slice(1).join(' '));
+    if(cmd==='help'||cmd==='?')return splunk(['help']);
+    return `<span class="err">${esc(cmd)}: command not found.</span> This lab uses the <span class="cy">splunk</span> CLI plus <span class="cy">ssh / exit / cat / ls</span>.`;
+  }
+  // ---- view ----
+  const v=$(`<div class="view">${topBar()}<button class="back" id="lback">← Back</button>
+    <div class="brand" style="margin-bottom:10px"><div class="logo">🧪</div><h1>Guided Lab</h1><p>Splunk Enterprise Data Administration — a safe, simulated lab environment</p></div>
+    <div class="lablayout">
+      <div class="lab-main">
+        <div class="term">
+          <div class="term-hd"><span class="term-dot" style="background:#ff5f57"></span><span class="term-dot" style="background:#febc2e"></span><span class="term-dot" style="background:#28c840"></span><span class="term-title" id="labtitle">student@am1</span></div>
+          <div class="term-body" id="labbody"></div>
+        </div>
+        <div class="term-hint">Servers: <b>am1</b> (jump host) · sh1 · hf1 · uf1 · uf2 · idx1 · idx2. Move around with <code>ssh uf1</code> / <code>exit</code>. Commands change the real (simulated) config — try <code>cat /opt/splunkforwarder/etc/system/local/outputs.conf</code> after adding a forward-server. ↑/↓ history.</div>
+      </div>
+      <div class="lab-side" id="labside"></div>
+    </div></div>`);
+  wireTop(v);
+  v.querySelector('#lback').onclick=examInfo;
+  const body=v.querySelector('#labbody'), side=v.querySelector('#labside'), title=v.querySelector('#labtitle');
+  const line=(html='')=>{const d=document.createElement('div');d.className='term-line';d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;};
+  const hist=[]; let hi=-1;
+  const SUBS=['status','start','stop','restart','version','list','btool','add','remove','enable','disable','show','set','edit','reload','help'];
+  function renderSide(){
+    const m=MODULES[active];
+    const done=m.steps.map(st=>history.some(e=>st.test(e.host,e.cmd)));
+    const dn=done.filter(Boolean).length;
+    side.innerHTML=`<div class="lab-mods">${MODULES.map((mm,i)=>`<button class="lab-mod ${i===active?'on':''}" data-i="${i}">${mm.name}</button>`).join('')}</div>
+      <div class="lab-card"><h4>📋 ${esc(m.name.replace(/^\d+ · /,''))}<span class="lab-prog">${dn}/${m.steps.length}</span></h4>
+      <div style="padding:11px 14px;color:var(--muted);font-size:.8rem;line-height:1.5;border-bottom:1px solid var(--hair)">${esc(m.intro)}</div>
+      <div class="lab-steps">${m.steps.map((st,i)=>`<div class="lab-step ${done[i]?'done':''}"><div class="box">${done[i]?'✓':i+1}</div><div><div class="lab-txt">${esc(st.t)}</div><code class="lab-cmd" data-c="${esc(st.c)}">${esc(st.c)}</code></div></div>`).join('')}</div></div>
+      ${dn===m.steps.length?`<div class="lab-done-banner">🎉 Module complete — every step verified. Try the next module above.</div>`:''}`;
+    side.querySelectorAll('.lab-mod').forEach(b=>b.onclick=()=>{active=+b.dataset.i;renderSide();});
+    side.querySelectorAll('.lab-cmd').forEach(c=>c.onclick=()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp){inp.value=c.dataset.c;inp.focus();}});
+  }
+  function newPrompt(){
+    title.textContent='student@'+LS.cur;
+    const row=document.createElement('div');row.className='term-inrow';row.innerHTML=`<span class="term-prompt">student@${LS.cur}:~$</span> `;
+    const inp=document.createElement('input');inp.className='term-input';inp.setAttribute('autocomplete','off');inp.setAttribute('spellcheck','false');
+    row.appendChild(inp);body.appendChild(row);inp.focus();body.scrollTop=body.scrollHeight;
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){const raw=inp.value;inp.disabled=true;hi=-1;const hostAt=LS.cur;row.innerHTML=`<span class="term-prompt">student@${hostAt}:~$</span> <span>${esc(raw)}</span>`;if(raw.trim())hist.push(raw);
+        const out=run(raw);
+        if(raw.trim()){history.push({host:hostAt,cmd:normCmd(raw)});renderSide();}
+        if(out===null){newPrompt();return;} if(out!=='')line(out); newPrompt(); e.preventDefault();}
+      else if(e.key==='ArrowUp'){if(hist.length){hi=hi<0?hist.length-1:Math.max(0,hi-1);inp.value=hist[hi];setTimeout(()=>inp.setSelectionRange(inp.value.length,inp.value.length),0);}e.preventDefault();}
+      else if(e.key==='ArrowDown'){if(hi>=0){hi++;if(hi>=hist.length){hi=-1;inp.value='';}else inp.value=hist[hi];}e.preventDefault();}
+      else if(e.key==='Tab'){const m=inp.value.match(/^(\s*splunk\s+)(\S*)$/);if(m){const pfx=m[2].toLowerCase();const hit=SUBS.filter(x=>x.startsWith(pfx));if(hit.length===1)inp.value=m[1]+hit[0]+' ';else if(hit.length>1){let cp=hit[0];hit.forEach(x=>{while(cp&&!x.startsWith(cp))cp=cp.slice(0,-1);});inp.value=m[1]+cp;}}e.preventDefault();}
+    });
+    return inp;
+  }
+  line(`<span class="cy">Splunk Data Admin — Guided Lab</span>. You are on <b>am1</b> (the jump/management host).`);
+  line(`<span class="dim">Pick a module on the right and follow the steps. Commands really change the (simulated) config. Type</span> <span class="ok">splunk help</span><span class="dim"> or click a command to insert it.</span>`);
+  renderSide();
+  newPrompt();
+  body.addEventListener('click',()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
   show(v);
   requestAnimationFrame(()=>{const inp=body.querySelector('.term-input:not([disabled])');if(inp)inp.focus();});
 }
