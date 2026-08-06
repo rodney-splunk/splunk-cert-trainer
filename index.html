@@ -764,8 +764,8 @@ function labMode(){
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // ---- simulated environment state ----
   const mk=(o)=>Object.assign({started:false,listen:[],fwd:[],mon:[],tcp:[],udp:[],scripts:[],hec:false,hectoken:null,fs:{},tree:{},cwd:null,lic:'Enterprise',deploy:null},o);
-  const LS={cur:'am1',stack:[],hosts:{
-    am1:mk({home:'/opt/splunk',role:'Agent Management / Test Server',type:'ent',started:true,servername:'splunk01',mon:[{path:'/opt/log/www2/access.log',index:'test',st:'access_combined_wcookie'}]}),
+  const LS={cur:'mgmt1',stack:[],hosts:{
+    mgmt1:mk({home:'/opt/splunk',role:'Agent Management / Test Server',type:'ent',started:true,servername:'splunk-lab',mon:[{path:'/var/log/web/access.log',index:'test',st:'access_combined_wcookie'}]}),
     sh1:mk({home:'/opt/splunk',role:'Search Head',type:'sh',started:true,servername:'sh1'}),
     hf1:mk({home:'/opt/splunk',role:'Heavy Forwarder 1',type:'hf',servername:'hf1'}),
     uf1:mk({home:'/opt/splunkforwarder',role:'Universal Forwarder 1',type:'uf',lic:'Forwarder',servername:'uf1'}),
@@ -780,10 +780,10 @@ function labMode(){
     '192.168.10.24 - - [25/May/2027:10:30:07 -0700] "GET /images/logo.png HTTP/1.1" 200 18211 "http://shop.example/" "Mozilla/5.0"',
     '203.0.113.9 - - [25/May/2027:10:30:09 -0700] "GET /login HTTP/1.1" 401 173 "-" "python-requests/2.31"'].join('\n')+'\n';
   Object.values(LS.hosts).forEach(h=>{h.cwd=h.home+'/bin';const D=p=>h.tree[p]={t:'d'};const F=(p,c)=>h.tree[p]={t:'f',c:c};
-    ['/','/opt','/var','/var/log','/opt/log','/opt/log/www2',h.home,h.home+'/bin',h.home+'/etc',h.home+'/etc/system',h.home+'/etc/system/local',h.home+'/etc/system/default',h.home+'/etc/system/README',h.home+'/etc/apps',h.home+'/etc/apps/search',h.home+'/etc/apps/search/local',h.home+'/etc/apps/search/default',h.home+'/etc/deployment-apps',h.home+'/var',h.home+'/var/log',h.home+'/var/log/splunk'].forEach(D);
+    ['/','/opt','/var','/var/log','/var/log/web',h.home,h.home+'/bin',h.home+'/etc',h.home+'/etc/system',h.home+'/etc/system/local',h.home+'/etc/system/default',h.home+'/etc/system/README',h.home+'/etc/apps',h.home+'/etc/apps/search',h.home+'/etc/apps/search/local',h.home+'/etc/apps/search/default',h.home+'/etc/deployment-apps',h.home+'/var',h.home+'/var/log',h.home+'/var/log/splunk'].forEach(D);
     h.tree[h.home+'/etc/apps/search/local/inputs.conf']={t:'f'};h.tree[h.home+'/etc/system/local/server.conf']={t:'f'};
     if(/forwarder/.test(h.home)||/Heavy/.test(h.role))h.tree[h.home+'/etc/system/local/outputs.conf']={t:'f'};
-    F('/opt/log/www2/access.log',ACCESS);F(h.home+'/etc/splunk.version','VERSION=10.0.1\nBUILD=5a009d941268\nPRODUCT=splunk\n');F(h.home+'/etc/apps/search/default/app.conf','[install]\nstate = enabled\n\n[ui]\nis_visible = true\nlabel = Search & Reporting\n');});
+    F('/var/log/web/access.log',ACCESS);F(h.home+'/etc/splunk.version','VERSION=10.0.1\nBUILD=5a009d941268\nPRODUCT=splunk\n');F(h.home+'/etc/apps/search/default/app.conf','[install]\nstate = enabled\n\n[ui]\nis_visible = true\nlabel = Search & Reporting\n');});
   function nrm(p){const st=[];p.split('/').forEach(s=>{if(s===''||s==='.')return;if(s==='..')st.pop();else st.push(s);});return '/'+st.join('/');}
   function resolve(p){if(!p)return H().cwd;if(p==='~')return H().home;if(p[0]==='/')return nrm(p);return nrm(H().cwd+'/'+p);}
   function isDir(p){const n=H().tree[p];return p==='/'||(n&&n.t==='d');}
@@ -806,25 +806,25 @@ function labMode(){
   const history=[]; // {host, cmd}
   // ---- guided modules ----
   const MODULES=[
-    {id:'m2',name:'2 · Config Files & btool',intro:'On am1, inspect Splunk settings from the CLI and find where the running config comes from.',steps:[
-      {t:'Check the Splunk service status on am1.',c:'splunk status',test:(h,c)=>h==='am1'&&/^splunk status\b/.test(c)},
-      {t:'Show the Splunk version.',c:'splunk version',test:(h,c)=>h==='am1'&&/^splunk version\b/.test(c)},
-      {t:'Show the Splunk Web port.',c:'splunk show web-port',test:(h,c)=>h==='am1'&&/^splunk show web-port\b/.test(c)},
-      {t:'Show the management (splunkd) port.',c:'splunk show splunkd-port',test:(h,c)=>h==='am1'&&/^splunk show splunkd-port\b/.test(c)},
-      {t:'Use btool --debug to see where the [general] server settings come from.',c:'splunk btool server list general --debug',test:(h,c)=>h==='am1'&&/^splunk btool server list general\b/.test(c)&&/--debug/.test(c)},
-      {t:'View the access.log input config with btool --debug (note the source files).',c:'splunk btool inputs list --debug',test:(h,c)=>h==='am1'&&/^splunk btool inputs list\b/.test(c)&&/--debug/.test(c)},
+    {id:'m2',name:'2 · Config Files & btool',intro:'On mgmt1, inspect Splunk settings from the CLI and find where the running config comes from.',steps:[
+      {t:'Check the Splunk service status on mgmt1.',c:'splunk status',test:(h,c)=>h==='mgmt1'&&/^splunk status\b/.test(c)},
+      {t:'Show the Splunk version.',c:'splunk version',test:(h,c)=>h==='mgmt1'&&/^splunk version\b/.test(c)},
+      {t:'Show the Splunk Web port.',c:'splunk show web-port',test:(h,c)=>h==='mgmt1'&&/^splunk show web-port\b/.test(c)},
+      {t:'Show the management (splunkd) port.',c:'splunk show splunkd-port',test:(h,c)=>h==='mgmt1'&&/^splunk show splunkd-port\b/.test(c)},
+      {t:'Use btool --debug to see where the [general] server settings come from.',c:'splunk btool server list general --debug',test:(h,c)=>h==='mgmt1'&&/^splunk btool server list general\b/.test(c)&&/--debug/.test(c)},
+      {t:'View the access.log input config with btool --debug (note the source files).',c:'splunk btool inputs list --debug',test:(h,c)=>h==='mgmt1'&&/^splunk btool inputs list\b/.test(c)&&/--debug/.test(c)},
     ]},
-    {id:'m3',name:'3 · Configure Forwarders',intro:'Enable receiving on am1, then start UF1, point it at am1, and add a monitor.',steps:[
-      {t:'On am1, enable a receiving port on 9997.',c:'splunk enable listen 9997',test:(h,c)=>h==='am1'&&/^splunk enable listen 9997\b/.test(c)},
-      {t:'SSH from am1 into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+    {id:'m3',name:'3 · Configure Forwarders',intro:'Enable receiving on mgmt1, then start UF1, point it at mgmt1, and add a monitor.',steps:[
+      {t:'On mgmt1, enable a receiving port on 9997.',c:'splunk enable listen 9997',test:(h,c)=>h==='mgmt1'&&/^splunk enable listen 9997\b/.test(c)},
+      {t:'SSH from mgmt1 into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
       {t:'Start Splunk on UF1 (accept the license).',c:'splunk start --accept-license',test:(h,c)=>h==='uf1'&&/^splunk start\b/.test(c)},
-      {t:'Configure UF1 to forward to am1:9997.',c:'splunk add forward-server am1:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server am1:9997\b/.test(c)},
+      {t:'Configure UF1 to forward to mgmt1:9997.',c:'splunk add forward-server mgmt1:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server mgmt1:9997\b/.test(c)},
       {t:'Verify UF1 is forwarding.',c:'splunk list forward-server',test:(h,c)=>h==='uf1'&&/^splunk list forward-server\b/.test(c)},
-      {t:'Add a monitor for access.log on UF1 (index test, sourcetype access_combined_wcookie).',c:'splunk add monitor /opt/log/www2/access.log -index test -sourcetype access_combined_wcookie',test:(h,c)=>h==='uf1'&&/^splunk add monitor \/opt\/log\/www2\/access\.log\b/.test(c)&&/-index\s+test/.test(c)},
-      {t:'Return to am1.',c:'exit',test:(h,c)=>h==='uf1'&&c==='exit'},
+      {t:'Add a monitor for access.log on UF1 (index test, sourcetype access_combined_wcookie).',c:'splunk add monitor /var/log/web/access.log -index test -sourcetype access_combined_wcookie',test:(h,c)=>h==='uf1'&&/^splunk add monitor \/var\/log\/web\/access\.log\b/.test(c)&&/-index\s+test/.test(c)},
+      {t:'Return to mgmt1.',c:'exit',test:(h,c)=>h==='uf1'&&c==='exit'},
     ]},
     {id:'m4',name:'4 · Customize Forwarders',intro:'Load-balance UF1 across both indexers, then make HF1 an intermediate forwarder for UF2.',steps:[
-      {t:'On UF1 (ssh uf1), remove am1 as a forward-server.',c:'splunk remove forward-server am1:9997',test:(h,c)=>h==='uf1'&&/^splunk remove forward-server am1:9997\b/.test(c)},
+      {t:'On UF1 (ssh uf1), remove mgmt1 as a forward-server.',c:'splunk remove forward-server mgmt1:9997',test:(h,c)=>h==='uf1'&&/^splunk remove forward-server mgmt1:9997\b/.test(c)},
       {t:'Point UF1 at idx1:9997.',c:'splunk add forward-server idx1:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server idx1:9997\b/.test(c)},
       {t:'Point UF1 at idx2:9997 (now load-balancing across both indexers).',c:'splunk add forward-server idx2:9997',test:(h,c)=>h==='uf1'&&/^splunk add forward-server idx2:9997\b/.test(c)},
       {t:'On HF1 (ssh hf1), enable an intermediate receiving port 9901.',c:'splunk enable listen 9901',test:(h,c)=>h==='hf1'&&/^splunk enable listen 9901\b/.test(c)},
@@ -851,14 +851,27 @@ function labMode(){
       {t:'View your new network stanzas in inputs.conf.',c:'cat /opt/splunk/etc/apps/search/local/inputs.conf',test:(h,c)=>h==='hf1'&&/^cat .*inputs\.conf$/.test(c)},
     ]},
     {id:'m9',name:'9 · HEC Inputs',intro:'Enable the HTTP Event Collector and create a token for agentless ingestion.',steps:[
-      {t:'Enable the HTTP Event Collector on am1.',c:'splunk http-event-collector enable',test:(h,c)=>h==='am1'&&/^splunk http-event-collector enable\b/.test(c)},
-      {t:'Create a HEC token named app_hec.',c:'splunk http-event-collector create app_hec',test:(h,c)=>h==='am1'&&/^splunk http-event-collector create app_hec\b/.test(c)},
-      {t:'List HEC to confirm it is enabled with a token.',c:'splunk http-event-collector list',test:(h,c)=>h==='am1'&&/^splunk http-event-collector list\b/.test(c)},
+      {t:'Enable the HTTP Event Collector on mgmt1.',c:'splunk http-event-collector enable',test:(h,c)=>h==='mgmt1'&&/^splunk http-event-collector enable\b/.test(c)},
+      {t:'Create a HEC token named app_hec.',c:'splunk http-event-collector create app_hec',test:(h,c)=>h==='mgmt1'&&/^splunk http-event-collector create app_hec\b/.test(c)},
+      {t:'List HEC to confirm it is enabled with a token.',c:'splunk http-event-collector list',test:(h,c)=>h==='mgmt1'&&/^splunk http-event-collector list\b/.test(c)},
     ]},
     {id:'m14',name:'14 · Filter & Route',intro:'Drop unwanted events at index time by editing props.conf + transforms.conf to route to the nullQueue. Do this on a parsing tier — HF1.',steps:[
       {t:'SSH into HF1 (a heavy forwarder parses data).',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
       {t:'Edit transforms.conf: add a [setnull] transform with REGEX, DEST_KEY = queue, and FORMAT = nullQueue.',c:'nano /opt/splunk/etc/apps/search/local/transforms.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/nullqueue/i.test(t))},
       {t:'Edit props.conf: reference the transform (TRANSFORMS-set = setnull) under the target sourcetype.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/transforms-/i.test(t))},
+    ]},
+    {id:'m8',name:'8 · Scripted Inputs',intro:'Add a scripted input that runs a script on an interval and indexes its stdout.',steps:[
+      {t:'SSH into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+      {t:'Add a scripted input for a metrics script, running every 60 seconds.',c:'splunk add exec /opt/splunkforwarder/etc/apps/search/bin/metrics.sh -interval 60',test:(h,c)=>h==='uf1'&&/^splunk add exec\b/.test(c)},
+      {t:'Confirm the [script://...] stanza appears in inputs.conf.',c:'cat /opt/splunkforwarder/etc/apps/search/local/inputs.conf',state:(LS)=>LS.hosts.uf1.scripts.length>0},
+    ]},
+    {id:'m12',name:'12 · Create Source Types',intro:'Define a custom source type by writing parsing rules in props.conf.',steps:[
+      {t:'SSH into HF1 (the parsing tier).',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
+      {t:'Edit props.conf: add a [my_app_logs] stanza with SHOULD_LINEMERGE, LINE_BREAKER, and TIME_FORMAT, then save.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/\[my_app_logs\]/i.test(t)&&/(line_breaker|time_format|should_linemerge)/i.test(t))},
+    ]},
+    {id:'m13',name:'13 · Manipulate Data (SEDCMD)',intro:'Mask sensitive strings at index time with a SEDCMD in props.conf.',steps:[
+      {t:'SSH into HF1.',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
+      {t:'Edit props.conf: add a SEDCMD under your sourcetype to mask values (e.g. credit-card digits), then save.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/sedcmd/i.test(t))},
     ]},
   ];
   const ABOUT={
@@ -870,6 +883,9 @@ function labMode(){
     m7:"Splunk can listen directly on <b>TCP/UDP</b> ports (e.g. UDP <b>514</b> for syslog). Prefer doing this on a <b>heavy forwarder</b> or a dedicated syslog collector — not an indexer — and consider writing syslog to files for reliability. <code>sourcetype</code> tells Splunk how to parse the stream.",
     m9:"The <b>HTTP Event Collector</b> is <b>agentless</b> ingestion: enable HEC, create a <b>token</b>, and apps POST events to port <b>8088</b> with that token in the Authorization header — no forwarder required.",
     m14:"To drop noise at index time, a <b>transforms.conf</b> transform sets <code>DEST_KEY = queue</code> and <code>FORMAT = nullQueue</code>, and <b>props.conf</b> references it with <code>TRANSFORMS-&lt;name&gt;</code> under the sourcetype. This must run on a <b>parsing tier</b> (heavy forwarder or indexer) — a universal forwarder does not parse.",
+    m8:"A <b>scripted input</b> runs a program on a schedule and indexes whatever it writes to <b>stdout</b> — great for APIs, custom metrics, or command output. It appears as a <code>[script://&lt;path&gt;]</code> stanza with an <code>interval</code>; scripts live in an app&rsquo;s <code>bin/</code> directory.",
+    m12:"A <b>source type</b> tells Splunk how to parse a format — event breaking (<code>LINE_BREAKER</code>, <code>SHOULD_LINEMERGE</code>) and timestamps (<code>TIME_PREFIX</code>, <code>TIME_FORMAT</code>). You define it as a stanza in <b>props.conf</b> named after the sourcetype, on a parsing tier (HF or indexer).",
+    m13:"<b>SEDCMD</b> applies sed-style substitution to <b>raw data at index time</b> — commonly to <b>mask</b> sensitive values (card numbers, SSNs) before they are written to disk. It goes in <b>props.conf</b> under the sourcetype and only runs where parsing happens (HF or indexer), never a UF.",
   };
   let active=0;
   // ---- command engine ----
@@ -909,10 +925,10 @@ function labMode(){
         if(conf==='server')return `${sp('system/default/server.conf')}[general]\n${sp('system/local/server.conf')}serverName = ${h.servername}\n${sp('system/default/server.conf')}sessionTimeout = 1h`;
         return `<span class="dim"># merged ${esc(conf)}.conf (add --debug for source files)</span>`;}
       case 'show':{const w=(r[0]||'').toLowerCase();const map={'web-port':'Web port: 8000','splunkd-port':'Splunkd port: 8089','appserver-ports':'Application server ports on loopback interface: 8065','kvstore-port':'KV Store port: 8191','servername':'Server name: '+h.servername,'default-hostname':'Default hostname for data inputs: '+h.servername};if(map[w])return map[w];if(w==='config'){return splunk(['btool','server','list','general','--debug']);}return `<span class="dim">show ${esc(r[0]||'')} — not simulated.</span>`;}
-      case 'set':{if((r[0]||'')==='deploy-poll'){h.deploy=r[1]||'am1:8089';return `Configuration updated.`;}return `<span class="ok">Setting updated.</span>`;}
+      case 'set':{if((r[0]||'')==='deploy-poll'){h.deploy=r[1]||'mgmt1:8089';return `Configuration updated.`;}return `<span class="ok">Setting updated.</span>`;}
       case 'edit':{if((r[0]||'')==='licenser-groups'){if(/Forwarder/i.test(a.join(' '))){h.lic='Forwarder';return `The licenser-groups object has been edited.\n<span class="warn">You need to restart splunkd for changes to take effect.</span>`;}return `The licenser-groups object has been edited.`;}return `<span class="ok">Edited.</span>`;}
       case 'reload':return (r[0]==='deploy-server')?`Reloading serverclass(es)...  <span class="ok">Done.</span>`:`<span class="err">Nothing to reload for '${esc(r[0]||'')}'.</span>`;
-      case 'search':{const q=a.slice(1).join(' ').replace(/^['"]|['"]$/g,'');if(!q)return need("search '<SPL>'");if(/index=_internal/.test(q)&&/tstats|splunk_server/.test(q))return `<span class="dim"># ${esc(q)}</span>\nsplunk_server   count\nidx1            48213\nidx2            47190\nsh1             9922`;return `<span class="dim"># ${esc(q)}</span>\n_time                 host       source                        sourcetype                 status\n2027-05-25 10:30:02   ${h.servername.padEnd(9)}  /opt/log/www2/access.log      access_combined_wcookie    200\n2027-05-25 10:30:04   ${h.servername.padEnd(9)}  /opt/log/www2/access.log      access_combined_wcookie    404\n<span class="dim">(showing 2 of 1,842 matching events — simulated)</span>`;}
+      case 'search':{const q=a.slice(1).join(' ').replace(/^['"]|['"]$/g,'');if(!q)return need("search '<SPL>'");if(/index=_internal/.test(q)&&/tstats|splunk_server/.test(q))return `<span class="dim"># ${esc(q)}</span>\nsplunk_server   count\nidx1            48213\nidx2            47190\nsh1             9922`;return `<span class="dim"># ${esc(q)}</span>\n_time                 host       source                        sourcetype                 status\n2027-05-25 10:30:02   ${h.servername.padEnd(9)}  /var/log/web/access.log      access_combined_wcookie    200\n2027-05-25 10:30:04   ${h.servername.padEnd(9)}  /var/log/web/access.log      access_combined_wcookie    404\n<span class="dim">(showing 2 of 1,842 matching events — simulated)</span>`;}
       default:return `<span class="err">Command '${esc(s)}' not found on the splunk CLI.</span> Type <span class="cy">splunk help</span>.`;
     }
   }
@@ -922,7 +938,7 @@ function labMode(){
     if(cmd==='sudo'){parts.shift();cmd=parts[0]||'';}
     if(cmd==='clear'||cmd==='cls'){body.innerHTML='';return null;}
     if(cmd==='ssh'){const tgt=parts[1];if(!tgt)return `<span class="err">usage: ssh &lt;host&gt;</span>`;if(!LS.hosts[tgt])return `<span class="err">ssh: could not resolve hostname ${esc(tgt)}: Name or service not known</span>`;if(tgt===LS.cur)return `<span class="warn">Already on ${esc(tgt)}.</span>`;LS.stack.push(LS.cur);LS.cur=tgt;const h=H();return `<span class="dim">Warning: Permanently added '${esc(tgt)}' to the list of known hosts.</span>\nWelcome to ${h.role} (${esc(tgt)}).\n<span class="dim">SPLUNK_HOME=${h.home}${h.started?'':'  — splunkd not started (run: splunk start --accept-license)'}</span>`;}
-    if(cmd==='exit'||cmd==='logout'){if(LS.stack.length){const from=LS.cur;LS.cur=LS.stack.pop();return `<span class="dim">Connection to ${esc(from)} closed.</span>`;}return `<span class="warn">You are on am1 (the jump host). Use the ← Back button to leave the lab.</span>`;}
+    if(cmd==='exit'||cmd==='logout'){if(LS.stack.length){const from=LS.cur;LS.cur=LS.stack.pop();return `<span class="dim">Connection to ${esc(from)} closed.</span>`;}return `<span class="warn">You are on mgmt1 (the jump host). Use the ← Back button to leave the lab.</span>`;}
     const norm=normCmd(t);
     if(/^splunk\b/.test(norm))return splunk(norm.split(' ').slice(1));
     if(cmd==='nano'||cmd==='vi'||cmd==='vim'){const f=parts[1];if(!f)return `<span class="err">usage: ${cmd} &lt;file&gt;</span>`;openEditor(f,cmd==='nano'?'nano':'vi');return null;}
@@ -944,10 +960,10 @@ function labMode(){
     <div class="lablayout">
       <div class="lab-main">
         <div class="term">
-          <div class="term-hd"><span class="term-dot" style="background:#ff5f57"></span><span class="term-dot" style="background:#febc2e"></span><span class="term-dot" style="background:#28c840"></span><span class="term-title" id="labtitle">student@am1</span></div>
+          <div class="term-hd"><span class="term-dot" style="background:#ff5f57"></span><span class="term-dot" style="background:#febc2e"></span><span class="term-dot" style="background:#28c840"></span><span class="term-title" id="labtitle">student@mgmt1</span></div>
           <div class="term-body" id="labbody"></div>
         </div>
-        <div class="term-hint">Servers: <b>am1</b> (jump host) · sh1 · hf1 · uf1 · uf2 · idx1 · idx2. Move around with <code>ssh uf1</code> / <code>exit</code>. Commands change the real (simulated) config — try <code>cat /opt/splunkforwarder/etc/system/local/outputs.conf</code> after adding a forward-server. ↑/↓ history.</div>
+        <div class="term-hint">Servers: <b>mgmt1</b> (jump host) · sh1 · hf1 · uf1 · uf2 · idx1 · idx2. Move around with <code>ssh uf1</code> / <code>exit</code>. Commands change the real (simulated) config — try <code>cat /opt/splunkforwarder/etc/system/local/outputs.conf</code> after adding a forward-server. ↑/↓ history.</div>
       </div>
       <div class="lab-side" id="labside"></div>
     </div></div>`);
@@ -1004,7 +1020,7 @@ function labMode(){
     });
     return inp;
   }
-  line(`<span class="cy">Splunk Data Admin — Guided Lab</span>. You are on <b>am1</b> (the jump/management host).`);
+  line(`<span class="cy">Splunk Data Admin — Guided Lab</span>. You are on <b>mgmt1</b> (the jump/management host).`);
   line(`<span class="dim">Pick a module on the right and follow the steps. Commands really change the (simulated) config. Type</span> <span class="ok">splunk help</span><span class="dim"> or click a command to insert it.</span>`);
   renderSide();
   newPrompt();
@@ -1025,7 +1041,7 @@ function conceptsScreen(){
      <tr><td><b>Global</b></td><td>system/local → app local → app default → system/default</td><td>server.conf, indexes.conf, inputs/outputs on forwarders</td></tr>
      <tr><td><b>App / user</b> (search-time)</td><td>user dir → current-app local → current-app default → other apps → system</td><td>savedsearches, props/transforms used at search time, macros</td></tr></table>
      <p>Files merge <b>setting by setting</b> — a higher-precedence file overrides only the keys it defines; everything else falls through to lower files.</p>`,
-     example:`# global context example\n$SPLUNK_HOME/etc/system/local/server.conf   → serverName = splunk01   ✅ WINS\n$SPLUNK_HOME/etc/apps/foo/default/server.conf → serverName = foo        (loses)`,
+     example:`# global context example\n$SPLUNK_HOME/etc/system/local/server.conf   → serverName = splunk-lab   ✅ WINS\n$SPLUNK_HOME/etc/apps/foo/default/server.conf → serverName = foo        (loses)`,
      gotcha:`Don&rsquo;t guess the winner — run <code>splunk btool &lt;conf&gt; list --debug</code> and it prints the source file of every effective setting.`,doc:D+'Admin/Wheretofindtheconfigurationfiles'},
     {icon:'🎯',title:'Event Type Priority',tag:'counter-intuitive',why:`A <b>lower</b> priority number means a <b>higher</b> priority — the opposite of what most people assume.`,
      body:`<p>Priority ranges <b>1 (best) to 10 (worst)</b>; the default is <b>5</b>. When one event matches multiple event types, Splunk orders them by priority and the <b>best (lowest-number) event type&rsquo;s color</b> is the one displayed. Only one color shows per event.</p>`,
@@ -1033,7 +1049,7 @@ function conceptsScreen(){
      gotcha:`Priority <b>1 beats priority 10</b>. If colors aren&rsquo;t showing as expected, check the priority numbers.`,doc:D+'Knowledge/Abouteventtypes'},
     {icon:'🔧',title:'btool',tag:'must-know',why:`It shows the <b>merged, on-disk</b> configuration — not the running config and not any single file — so people misread what it&rsquo;s telling them.`,
      body:`<p>Syntax: <code>splunk btool &lt;conf&gt; list [stanza] [--debug]</code>. It merges every layer of a <code>.conf</code> and prints the effective result. Add <code>--debug</code> to prefix each line with the <b>file it came from</b>. <code>splunk btool check</code> validates configs for errors.</p>`,
-     example:`splunk btool inputs list --debug\n/opt/splunk/etc/apps/search/local/inputs.conf  [monitor:///opt/log/www2/access.log]\n/opt/splunk/etc/apps/search/local/inputs.conf  index = test\n/opt/splunk/etc/system/default/inputs.conf     _rcvbuf = 1572864`,
+     example:`splunk btool inputs list --debug\n/opt/splunk/etc/apps/search/local/inputs.conf  [monitor:///var/log/web/access.log]\n/opt/splunk/etc/apps/search/local/inputs.conf  index = test\n/opt/splunk/etc/system/default/inputs.conf     _rcvbuf = 1572864`,
      gotcha:`btool reads <b>files on disk</b>, not what&rsquo;s loaded in memory — after editing a file you must <b>restart</b> for Splunk to actually use it.`,doc:D+'Troubleshooting/Usebtooltotroubleshootconfigurations'},
     {icon:'📥',title:'inputs.conf',tag:'core',why:`One file, many stanza types — and it&rsquo;s easy to confuse what belongs in inputs.conf vs outputs.conf.`,
      body:`<p><b>inputs.conf</b> defines what data Splunk <b>collects</b>, by stanza type:</p>
