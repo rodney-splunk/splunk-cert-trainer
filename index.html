@@ -318,7 +318,7 @@
   .lab-topic.on .tprog{color:rgba(255,255,255,.85)}
   @media(max-width:900px){.lablayout{flex-direction:column}.lab-topics{width:100%;position:static;max-height:210px;order:1}.lab-main{order:2}.lab-side{width:100%;order:3}}
   /* wider Guided Lab layout (breaks out of the 820px column) */
-  .labwide{width:min(1200px,96vw);position:relative;left:50%;transform:translateX(-50%)}
+  .labwide{margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);padding-left:max(16px,calc((100vw - 1200px)/2));padding-right:max(16px,calc((100vw - 1200px)/2))}
   .labwide .lab-side{width:370px}
   .labwide .lab-topics{width:215px}
   .labwide .term-body{height:min(72vh,680px);font-size:.9rem}
@@ -327,7 +327,7 @@
   .labwide .lab-step{font-size:.88rem;padding:11px 14px}
   .labwide .lab-card h4{font-size:.9rem}
   .labwide .term-hint{font-size:.84rem}
-  @media(max-width:900px){.labwide{width:auto;left:auto;transform:none}.labwide .lab-side{width:100%}.labwide .term-body{height:min(58vh,440px)}}
+  @media(max-width:900px){.labwide{margin-left:0;margin-right:0;padding-left:0;padding-right:0}.labwide .lab-side{width:100%}.labwide .term-body{height:min(58vh,440px)}}
   .lab-mods{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
   .lab-mod{background:var(--card);border:1px solid var(--hair);color:var(--text);border-radius:10px;padding:7px 11px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;box-shadow:none}
   .lab-mod.on{background:var(--accent);border-color:var(--accent);color:#fff}
