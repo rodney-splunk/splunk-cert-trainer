@@ -824,7 +824,7 @@ function labMode(){
     if(/outputs\.conf$/.test(ap)){structured=true;const m=text.match(/^\s*server\s*=\s*(.+)$/mi);h.fwd=m?m[1].split(',').map(s=>s.trim()).filter(Boolean):[];}
     else if(/inputs\.conf$/.test(ap)){structured=true;h.mon=[];h.listen=[];h.tcp=[];h.udp=[];h.scripts=[];text.split(/\n(?=\[)/).forEach(bl=>{const hd=bl.match(/^\[(monitor|splunktcp|tcp|udp|script):\/\/([^\]]+)\]/);if(!hd)return;const gv=k=>{const mm=bl.match(new RegExp('^\\s*'+k+'\\s*=\\s*(.+)$','mi'));return mm?mm[1].trim():undefined;};const kind=hd[1],val=hd[2];if(kind==='monitor')h.mon.push({path:val,index:gv('index')||'default',st:gv('sourcetype')||'auto'});else if(kind==='splunktcp')h.listen.push(+val);else if(kind==='tcp')h.tcp.push({port:val,st:gv('sourcetype')});else if(kind==='udp')h.udp.push({port:val,st:gv('sourcetype')});else if(kind==='script')h.scripts.push({path:val,interval:gv('interval'),st:gv('sourcetype'),index:gv('index')});});}
     else if(/server\.conf$/.test(ap)){structured=true;const m=text.match(/^\s*serverName\s*=\s*(.+)$/mi);if(m)h.servername=m[1].trim();}
-    if(structured)delete h.fs[ap];else h.fs[ap]=text;
+    if(structured&&!/inputs\.conf$/.test(ap))delete h.fs[ap];else h.fs[ap]=text;
     h.tree[ap]={t:'f'};}
   const history=[]; // {host, cmd}
   // ---- guided modules ----
@@ -896,6 +896,12 @@ function labMode(){
       {t:'SSH into HF1.',c:'ssh hf1',test:(h,c)=>/^ssh hf1$/.test(c)},
       {t:'Edit props.conf: add a SEDCMD under your sourcetype to mask values (e.g. credit-card digits), then save.',c:'nano /opt/splunk/etc/apps/search/local/props.conf',state:(LS)=>Object.values(LS.hosts.hf1.fs||{}).some(t=>/sedcmd/i.test(t))},
     ]},
+    {id:'m10',name:'10 · Monitor Tuning',intro:'Fine-tune a monitor input: set the host from the path, limit by file age, and filter which files are indexed.',steps:[
+      {t:'SSH into UF1.',c:'ssh uf1',test:(h,c)=>/^ssh uf1$/.test(c)},
+      {t:'Edit inputs.conf: add a [monitor:///var/log/] stanza with host_segment = 3 and ignoreOlderThan = 30d (nano), then save.',c:'nano /opt/splunkforwarder/etc/apps/search/local/inputs.conf',state:(LS)=>Object.values(LS.hosts.uf1.fs||{}).some(t=>/host_segment/i.test(t)&&/ignoreolderthan/i.test(t))},
+      {t:'Add a whitelist so only .log files are indexed (whitelist = \\.log$), then save.',c:'nano /opt/splunkforwarder/etc/apps/search/local/inputs.conf',state:(LS)=>Object.values(LS.hosts.uf1.fs||{}).some(t=>/whitelist/i.test(t))},
+      {t:'Confirm the effective input config with btool.',c:'splunk btool inputs list --debug',test:(h,c)=>h==='uf1'&&/^splunk btool inputs list\b/.test(c)},
+    ]},
     {id:'m5',name:'5 · Manage Agents',intro:'Centrally manage forwarders with the deployment server: make UF2 a client, stage an app, and map it with a server class.',steps:[
       {t:'SSH into UF2.',c:'ssh uf2',test:(h,c)=>/^ssh uf2$/.test(c)},
       {t:'Point UF2 at the deployment server (mgmt1:8089).',c:'splunk set deploy-poll mgmt1:8089',test:(h,c)=>h==='uf2'&&/^splunk set deploy-poll mgmt1:8089\b/.test(c)},
@@ -956,6 +962,7 @@ function labMode(){
     m8:"A <b>scripted input</b> runs a program on a schedule and indexes whatever it writes to <b>stdout</b> — great for APIs, custom metrics, or command output. It appears as a <code>[script://&lt;path&gt;]</code> stanza with an <code>interval</code>; scripts live in an app&rsquo;s <code>bin/</code> directory.",
     m12:"A <b>source type</b> tells Splunk how to parse a format — event breaking (<code>LINE_BREAKER</code>, <code>SHOULD_LINEMERGE</code>) and timestamps (<code>TIME_PREFIX</code>, <code>TIME_FORMAT</code>). You define it as a stanza in <b>props.conf</b> named after the sourcetype, on a parsing tier (HF or indexer).",
     m13:"<b>SEDCMD</b> applies sed-style substitution to <b>raw data at index time</b> — commonly to <b>mask</b> sensitive values (card numbers, SSNs) before they are written to disk. It goes in <b>props.conf</b> under the sourcetype and only runs where parsing happens (HF or indexer), never a UF.",
+    m10:"Monitor inputs have powerful tuning knobs in <b>inputs.conf</b>: <code>whitelist</code>/<code>blacklist</code> pick which files are indexed (regex; blacklist wins), <code>ignoreOlderThan</code> skips stale files by modification time, <code>followTail</code> indexes only new data, and <code>host_segment</code>/<code>host_regex</code> derive the host from the file path. Wildcards: <code>*</code> = one path segment, <code>...</code> = many.",
     m5:"The <b>deployment server</b> manages forwarders at scale. A forwarder becomes a <b>deployment client</b> via <code>set deploy-poll</code>. You stage apps in <code>etc/deployment-apps</code>, then a <b>server class</b> (in serverclass.conf) maps apps to groups of clients. <code>reload deploy-server</code> applies it; clients pull on phone-home. Note: settings in a client&rsquo;s <code>system/local</code> can&rsquo;t be overridden by a deployed app.",
     users:"Access is granted through <b>roles</b>, not users directly. A role bundles <b>capabilities</b> plus index access via <code>srchIndexesAllowed</code>/<code>srchIndexesDefault</code>. Build a least-privilege custom role, then assign users to it. Default roles: <b>admin</b>, <b>power</b>, <b>user</b>.",
     lic:"Splunk meters <b>daily indexed volume</b>. Change a host&rsquo;s license group with <code>edit licenser-groups</code> — a heavy forwarder that only forwards should use the <b>Forwarder</b> group so it doesn&rsquo;t consume Enterprise quota. The <b>license manager</b> holds the license; indexers report as <b>license peers</b>.",
