@@ -1188,6 +1188,23 @@ function conceptsScreen(){
      body:`<p><b>Index-time</b> (baked in at ingest): <code>host</code>, <code>source</code>, <code>sourcetype</code>, <code>_time</code>, and index-time extractions. Costly and <b>permanent</b> — changing them requires re-indexing.</p>
      <p><b>Search-time</b> (applied when you search): most field extractions, field aliases, calculated fields, lookups, event types, tags. Flexible — change any time, no re-index.</p>`,
      gotcha:`<b>Prefer search-time.</b> Index-time extractions bloat the index and can&rsquo;t be applied retroactively to already-indexed data.`,doc:D+'Knowledge/Aboutfields'},
+    {icon:'🗂️',title:'Config Files Reference',tag:'core',why:`A dozen <code>.conf</code> files each own one slice of Splunk — mixing up which file does what is a steady source of wrong answers.`,
+     body:`<p>Every setting lives in a <code>.conf</code> named for its job. The ones the exam expects you to recognize:</p>
+     <table class="ctable"><tr><th>File</th><th>What it controls</th><th>Phase</th></tr>
+     <tr><td><code>inputs.conf</code></td><td>What data to collect — monitor, tcp/udp, script, splunktcp receiver</td><td>input</td></tr>
+     <tr><td><code>outputs.conf</code></td><td>Where a forwarder <b>sends</b> data (target indexers, 9997)</td><td>forward</td></tr>
+     <tr><td><code>props.conf</code></td><td>Parsing per source/host/sourcetype — line breaking, timestamps; <i>references</i> transforms</td><td>parse/search</td></tr>
+     <tr><td><code>transforms.conf</code></td><td>The regex rules props calls — nullQueue routing, field extractions, lookups, masking</td><td>parse/search</td></tr>
+     <tr><td><code>indexes.conf</code></td><td>Index definitions, paths, retention (<code>frozenTimePeriodInSecs</code>, <code>maxTotalDataSizeMB</code>)</td><td>index</td></tr>
+     <tr><td><code>server.conf</code></td><td><code>serverName</code>, server roles, clustering, general settings</td><td>—</td></tr>
+     <tr><td><code>deploymentclient.conf</code></td><td>Makes a client poll a deployment server</td><td>—</td></tr>
+     <tr><td><code>serverclass.conf</code></td><td>On the deployment server: groups of clients → apps</td><td>—</td></tr>
+     <tr><td><code>authentication.conf</code></td><td>Auth method (LDAP/SAML) and user-to-role mapping</td><td>—</td></tr>
+     <tr><td><code>authorize.conf</code></td><td>Roles and the capabilities assigned to them</td><td>—</td></tr>
+     <tr><td><code>limits.conf</code></td><td>Search/resource limits (e.g. subsearch result cap, concurrency)</td><td>—</td></tr>
+     <tr><td><code>web.conf</code></td><td>Splunk Web settings — UI ports, SSL for the web tier</td><td>—</td></tr></table>`,
+     example:`# props.conf references a transform...\n[mysourcetype]\nTRANSFORMS-drop = drop_debug\n\n# ...and transforms.conf defines what it does\n[drop_debug]\nREGEX = DEBUG\nDEST_KEY = queue\nFORMAT = nullQueue`,
+     gotcha:`Two pairings the exam loves: <b>props.conf picks <i>which</i> events, transforms.conf says <i>what to do</i></b>; and <b>inputs = collect</b> vs <b>outputs = send</b>. Don&rsquo;t swap them.`,doc:D+'Admin/Listofconfigurationfiles'},
   ];
   const CQUIZ=[
     [{q:"The same setting is in <code>$SPLUNK_HOME/etc/system/local</code> and in an app's <code>default</code> directory. In the global context, which wins?",o:["The app's default value","The system/local value","They are merged and averaged","Whichever was edited last"],a:[1],e:"In the global context, <b>system/local</b> has the highest precedence, so it wins over any app default."},
@@ -1217,6 +1234,13 @@ function conceptsScreen(){
     [{q:"Best practice: where should most field extractions be done?",o:["Index time","Search time","On the universal forwarder","In the license manager"],a:[1],e:"Prefer <b>search-time</b> — flexible and changeable without re-indexing."},
      {q:"Which of these is an INDEX-time field?",o:["A field alias","A lookup output field","sourcetype","A calculated (eval) field"],a:[2],e:"<b>sourcetype</b> (like host, source, _time) is index-time. Aliases, lookups, calculated fields are search-time."},
      {q:"To change a field extraction WITHOUT re-indexing, it must be...",o:["Index-time","Search-time","Done on the forwarder","Stored in the fishbucket"],a:[1],e:"Only <b>search-time</b> extractions can be changed retroactively."}],
+    [{q:"Which configuration file defines <b>where</b> a forwarder sends its data?",o:["inputs.conf","outputs.conf","props.conf","indexes.conf"],a:[1],e:"<b>outputs.conf</b> sets the destination indexers (port 9997). inputs.conf defines what to collect."},
+     {q:"Line breaking and timestamp recognition for a sourcetype are configured in...",o:["transforms.conf","props.conf","indexes.conf","server.conf"],a:[1],e:"<b>props.conf</b> controls per-sourcetype parsing (LINE_BREAKER, TIME_FORMAT) and references transforms.conf for route/mask rules."},
+     {q:"Which file holds the regex rule that routes matching events to the nullQueue?",o:["props.conf","transforms.conf","authorize.conf","limits.conf"],a:[1],e:"<b>transforms.conf</b> defines the rule (REGEX, DEST_KEY=queue, FORMAT=nullQueue); props.conf references it with TRANSFORMS-."},
+     {q:"Roles and the capabilities assigned to them are defined in...",o:["authentication.conf","authorize.conf","server.conf","web.conf"],a:[1],e:"<b>authorize.conf</b> defines roles and capabilities. authentication.conf handles the auth method (LDAP/SAML) and mapping users to roles."},
+     {q:"Index storage paths and retention live in which file?",o:["indexes.conf","inputs.conf","props.conf","limits.conf"],a:[0],e:"<b>indexes.conf</b> defines each index, its paths, and retention (frozenTimePeriodInSecs, maxTotalDataSizeMB)."},
+     {q:"Which file makes a forwarder poll a deployment server for apps?",o:["serverclass.conf","deploymentclient.conf","outputs.conf","server.conf"],a:[1],e:"<b>deploymentclient.conf</b> points the client at its server. serverclass.conf lives on the SERVER and groups clients."},
+     {q:"The default 10,000-result subsearch cap and other search limits are set in...",o:["limits.conf","props.conf","web.conf","server.conf"],a:[0],e:"<b>limits.conf</b> controls search and resource limits."}],
   ];
   const mastered=t=>store.conceptMastery&&store.conceptMastery[t];
   const cards=CONCEPTS.map((c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
