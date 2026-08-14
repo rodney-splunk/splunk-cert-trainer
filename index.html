@@ -413,7 +413,11 @@ function applyTheme(){const t=store.theme;if(t==='auto')document.documentElement
 function cycleTheme(){store.theme=store.theme==='auto'?'dark':store.theme==='dark'?'light':'auto';saveStore();applyTheme();rerenderTop();}
 function themeIcon(){return store.theme==='auto'?'🌓':store.theme==='dark'?'🌙':'☀️';}
 let actx;
-function beep(ok){if(!store.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.type='sine';o.frequency.value=ok?880:210;g.gain.value=.06;o.start();g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+.28);o.stop(actx.currentTime+.3);}catch(e){}}
+function beep(ok){if(!store.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const now=actx.currentTime;
+  const note=(freq,start,dur,type,peak)=>{const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.0001,now+start);g.gain.exponentialRampToValueAtTime(peak,now+start+.02);g.gain.exponentialRampToValueAtTime(.0001,now+start+dur);o.start(now+start);o.stop(now+start+dur+.03);};
+  if(ok){/* bright ascending chime, Duolingo-style correct */ note(587.33,0,.13,'triangle',.12); note(880,.085,.15,'triangle',.13); note(1174.66,.18,.24,'triangle',.11);}
+  else{/* soft low descending donk, Duolingo-style wrong */ note(207.65,0,.19,'sine',.17); note(155.56,.11,.30,'sine',.15);}
+}catch(e){}}
 function toggleSound(){store.sound=!store.sound;saveStore();rerenderTop();}
 
 /* ============ badges ============ */
@@ -1242,6 +1246,132 @@ function conceptsScreen(){
      {q:"Which file makes a forwarder poll a deployment server for apps?",o:["serverclass.conf","deploymentclient.conf","outputs.conf","server.conf"],a:[1],e:"<b>deploymentclient.conf</b> points the client at its server. serverclass.conf lives on the SERVER and groups clients."},
      {q:"The default 10,000-result subsearch cap and other search limits are set in...",o:["limits.conf","props.conf","web.conf","server.conf"],a:[0],e:"<b>limits.conf</b> controls search and resource limits."}],
   ];
+  const CONFDEFS=[
+    {icon:'📤',title:'outputs.conf',tag:'core',why:`It is the twin of inputs.conf and it is easy to forget which one sends vs collects.`,
+     body:`<p><b>outputs.conf</b> lives <b>on a forwarder</b> and defines <b>where</b> data is sent — the receiving indexers.</p>
+     <ul><li><code>[tcpout]</code> with <code>defaultGroup</code> — the default target group</li><li><code>[tcpout:&lt;group&gt;]</code> with <code>server = idx1:9997, idx2:9997</code> — the indexers (multiple = load balancing)</li><li><code>[indexAndForward]</code> — also index locally while forwarding</li></ul>`,
+     example:`[tcpout]\ndefaultGroup = my_indexers\n\n[tcpout:my_indexers]\nserver = idx1:9997, idx2:9997`,
+     gotcha:`outputs.conf is on the <b>sender</b> (forwarder). The receiver (indexer) listens via <b>inputs.conf</b> <code>[splunktcp://9997]</code>.`,doc:D+'Admin/Outputsconf',
+     quiz:[
+      {q:"On a forwarder, which file defines <b>where</b> data is sent?",o:["inputs.conf","outputs.conf","props.conf","indexes.conf"],a:[1],e:"<b>outputs.conf</b> sets the destination indexers; inputs.conf defines what to collect."},
+      {q:"Which default port appears in outputs.conf <code>server</code> settings?",o:["8000","8089","9997","8088"],a:[2],e:"<b>9997</b> is the default receiving port on the indexers."},
+      {q:"You set <code>server = idxA:9997, idxB:9997</code>. What does listing multiple indexers do?",o:["Failover only","Automatic load balancing across them","Replicates buckets","Nothing"],a:[1],e:"Multiple servers = <b>automatic load balancing</b> across those indexers.",d:'med'},
+      {q:"Which stanza defines the default target group forwarders send to?",o:["<code>[tcpout]</code> with <code>defaultGroup</code>","<code>[tcpout-server]</code>","<code>[indexAndForward]</code>","<code>[target-broker]</code>"],a:[0],e:"<code>[tcpout]</code> with <code>defaultGroup=</code> names the default destination group.",d:'med'},
+      {q:"Which outputs.conf stanza lets an instance <b>index locally in addition to forwarding</b>?",o:["<code>[tcpout]</code>","<code>[indexAndForward]</code>","<code>[syslog]</code>","<code>[httpout]</code>"],a:[1],e:"<code>[indexAndForward]</code> keeps a local indexed copy; normally forwarders don't index.",d:'hard'},
+      {q:"Which statement about outputs.conf is TRUE?",o:["It lives on the indexer to receive data","It lives on the forwarder and defines destinations + load balancing","It defines index retention","It maps deployment clients to apps"],a:[1],e:"outputs.conf is on the <b>forwarder</b> (sender). The indexer's receiving side is inputs.conf <code>[splunktcp://9997]</code>.",d:'hard'}]},
+    {icon:'🧩',title:'props.conf',tag:'heavy',why:`It is the parsing brain, it references transforms, and it carries the source&gt;host&gt;sourcetype precedence — the single most-tested config file.`,
+     body:`<p><b>props.conf</b> sets parsing <b>per source / host / sourcetype</b>: line breaking (<code>LINE_BREAKER</code>, <code>SHOULD_LINEMERGE</code>), timestamps (<code>TIME_PREFIX</code>, <code>TIME_FORMAT</code>, <code>MAX_TIMESTAMP_LOOKAHEAD</code>, <code>TZ</code>), encoding (<code>CHARSET</code>), truncation (<code>TRUNCATE</code>), masking (<code>SEDCMD</code>).</p>
+     <p>It also <b>references transforms.conf</b>: <code>TRANSFORMS-</code> (index-time), <code>REPORT-</code> (search-time), plus <code>EXTRACT-</code> (inline) and <code>LOOKUP-</code>.</p>`,
+     example:`[my_sourcetype]\nCHARSET = UTF-8\nSHOULD_LINEMERGE = false\nTIME_PREFIX = ts=\nTRANSFORMS-drop = drop_debug`,
+     gotcha:`Stanza precedence is <b>source &gt; host &gt; sourcetype</b>. props does the parsing; transforms holds the regex action it calls.`,doc:D+'Admin/Propsconf',
+     quiz:[
+      {q:"Which file controls line breaking, timestamp extraction, and <code>CHARSET</code>?",o:["transforms.conf","props.conf","inputs.conf","limits.conf"],a:[1],e:"<b>props.conf</b> owns per-sourcetype parsing settings."},
+      {q:"props.conf settings are applied per...",o:["index","source / host / sourcetype","user","role"],a:[1],e:"props applies by <b>source, host, or sourcetype</b>."},
+      {q:"The same attribute is set under <code>[source::...]</code>, <code>[host::...]</code>, and <code>[sourcetype]</code>. Which wins?",o:["sourcetype","host","source","They merge equally"],a:[2],e:"Precedence is <b>source &gt; host &gt; sourcetype</b>.",d:'med'},
+      {q:"Which props attribute invokes an <b>index-time</b> transform (e.g. nullQueue routing)?",o:["<code>REPORT-</code>","<code>TRANSFORMS-</code>","<code>EXTRACT-</code>","<code>LOOKUP-</code>"],a:[1],e:"<code>TRANSFORMS-</code> = index-time; <code>REPORT-</code> = search-time.",d:'med'},
+      {q:"A <b>search-time</b> field extraction that references a transforms.conf stanza uses which attribute?",o:["<code>TRANSFORMS-</code>","<code>REPORT-</code>","<code>EXTRACT-</code>","<code>SEDCMD</code>"],a:[1],e:"<code>REPORT-</code> references a transforms stanza at search time; <code>EXTRACT-</code> is inline; <code>TRANSFORMS-</code> is index-time.",d:'hard'},
+      {q:"Which setting is NOT configured in props.conf?",o:["<code>LINE_BREAKER</code>","<code>TIME_FORMAT</code>","<code>CHARSET</code>","<code>server = idx:9997</code>"],a:[3],e:"<code>server = idx:9997</code> belongs in <b>outputs.conf</b>, not props.",d:'hard'}]},
+    {icon:'🔁',title:'transforms.conf',tag:'heavy',why:`It only acts when props.conf calls it, and the nullQueue recipe trips people up.`,
+     body:`<p><b>transforms.conf</b> holds the named <b>rules</b> props.conf references: routing/filtering (<code>DEST_KEY = queue</code>, <code>FORMAT = nullQueue</code>), index-time field writes (<code>WRITE_META</code>), field-extraction definitions used by <code>REPORT-</code>, lookup definitions, and host/source/sourcetype overrides.</p>`,
+     example:`[drop_debug]\nREGEX = DEBUG\nDEST_KEY = queue\nFORMAT = nullQueue`,
+     gotcha:`A transform does nothing until <b>props.conf references it</b> (e.g. <code>TRANSFORMS-drop = drop_debug</code>).`,doc:D+'Admin/Transformsconf',
+     quiz:[
+      {q:"The regex rule that props.conf references (routing, extraction, masking) lives in?",o:["props.conf","transforms.conf","indexes.conf","inputs.conf"],a:[1],e:"<b>transforms.conf</b> holds the named rules."},
+      {q:"To drop events to the nullQueue, the transform sets <code>DEST_KEY = queue</code> and <code>FORMAT =</code>?",o:["indexQueue","nullQueue","parsingQueue","typingQueue"],a:[1],e:"<code>FORMAT = nullQueue</code> discards the event before indexing."},
+      {q:"A transform alone drops nothing until...",o:["You restart twice","props.conf references it with <code>TRANSFORMS-</code>","You run <code>| delete</code>","You enable HEC"],a:[1],e:"props.conf must invoke it via <code>TRANSFORMS-&lt;class&gt;</code>.",d:'med'},
+      {q:"In the keep-only pattern, the transform that rescues matching events routes them with <code>FORMAT =</code>?",o:["nullQueue","indexQueue","keepQueue","mainQueue"],a:[1],e:"<code>indexQueue</code> sends the rescued events on to indexing.",d:'med'},
+      {q:"Which transforms.conf use case is <b>index-time</b> (not search-time)?",o:["An automatic lookup definition","nullQueue routing","A <code>REPORT-</code> field extraction","A field alias"],a:[1],e:"nullQueue routing is index-time; lookups, REPORT- extractions, and aliases are search-time.",d:'hard'},
+      {q:"Which correctly filters unwanted DEBUG events?",o:["A props <code>SEDCMD</code> only","transforms <code>REGEX=DEBUG DEST_KEY=queue FORMAT=nullQueue</code> + props <code>TRANSFORMS-</code>","<code>| delete DEBUG</code>","inputs.conf <code>blacklist=DEBUG</code>"],a:[1],e:"Index-time filtering needs the transform rule AND a props <code>TRANSFORMS-</code> reference.",d:'hard'}]},
+    {icon:'🗄️',title:'indexes.conf',tag:'core',why:`It defines indexes and drives the hot/warm/cold/frozen retention that the exam pokes at.`,
+     body:`<p><b>indexes.conf</b> defines each <b>index</b>, its storage paths (<code>homePath</code>, <code>coldPath</code>, <code>thawedPath</code>), and retention: <code>frozenTimePeriodInSecs</code> (age), <code>maxTotalDataSizeMB</code> (size), <code>coldToFrozenDir</code> (archive). Set <code>datatype = metric</code> for a metrics index; <code>repFactor</code> for clustering.</p>`,
+     example:`[web]\nhomePath = $SPLUNK_DB/web/db\ncoldPath = $SPLUNK_DB/web/colddb\nfrozenTimePeriodInSecs = 7776000`,
+     gotcha:`Freezing triggers on <b>age OR size, whichever is hit first</b>. Frozen = deleted by default unless <code>coldToFrozenDir</code> is set.`,doc:D+'Admin/Indexesconf',
+     quiz:[
+      {q:"Which file defines indexes, their paths, and retention?",o:["inputs.conf","indexes.conf","server.conf","limits.conf"],a:[1],e:"<b>indexes.conf</b>."},
+      {q:"Which setting freezes buckets by <b>age</b>?",o:["maxTotalDataSizeMB","frozenTimePeriodInSecs","homePath","repFactor"],a:[1],e:"<code>frozenTimePeriodInSecs</code> freezes by age."},
+      {q:"By default, when a bucket freezes it is...",o:["Archived forever","Deleted, unless <code>coldToFrozenDir</code> is set","Moved back to hot","Compressed and kept"],a:[1],e:"Frozen = <b>deleted by default</b>; set <code>coldToFrozenDir</code> to archive.",d:'med'},
+      {q:"<code>maxTotalDataSizeMB</code> controls freezing by...",o:["Age","Total index size","Number of searches","License"],a:[1],e:"It freezes oldest buckets once the index exceeds that size.",d:'med'},
+      {q:"Both <code>frozenTimePeriodInSecs</code> and <code>maxTotalDataSizeMB</code> are set. Which triggers freezing?",o:["Only age","Only size","Whichever limit is reached first","Neither"],a:[2],e:"<b>Whichever is hit first</b> rolls the bucket to frozen.",d:'hard'},
+      {q:"To create a <b>metrics</b> index rather than an events index, set...",o:["<code>datatype = metric</code>","<code>indextype = metric</code>","<code>metric = true</code>","<code>kind = metric</code>"],a:[0],e:"<code>datatype = metric</code> makes it a metrics index.",d:'hard'}]},
+    {icon:'🖥️',title:'server.conf',tag:'admin',why:`It is the catch-all for instance identity and clustering, so it hides a lot of admin settings.`,
+     body:`<p><b>server.conf</b> holds general server settings: <code>serverName</code>, the <code>[general]</code> stanza, <b>indexer clustering</b> (<code>[clustering]</code> mode = manager/peer/searchhead), search head clustering, KV store, and the shared secret <code>pass4SymmKey</code>.</p>`,
+     example:`[general]\nserverName = splunk-idx-01\n\n[clustering]\nmode = manager\nreplication_factor = 3`,
+     gotcha:`Changing <code>serverName</code> or clustering settings requires a <b>restart</b>. Parsing settings (LINE_BREAKER etc.) are NOT here — those are props.conf.`,doc:D+'Admin/Serverconf',
+     quiz:[
+      {q:"<code>serverName</code> and general server settings live in?",o:["web.conf","server.conf","inputs.conf","authorize.conf"],a:[1],e:"<b>server.conf</b>."},
+      {q:"After changing <code>serverName</code>, what is required?",o:["Nothing","A restart","Re-index all data","A new license"],a:[1],e:"Server-identity changes need a <b>restart</b>."},
+      {q:"Indexer clustering mode (manager/peer/searchhead) is set in which file's <code>[clustering]</code> stanza?",o:["indexes.conf","server.conf","outputs.conf","serverclass.conf"],a:[1],e:"<code>[clustering]</code> lives in <b>server.conf</b>.",d:'med'},
+      {q:"The shared secret cluster/SHC members use to authenticate is...",o:["<code>pass4SymmKey</code> in server.conf","<code>adminPassword</code>","<code>sslPassword</code>","an HEC token"],a:[0],e:"<code>pass4SymmKey</code> in server.conf is the shared secret.",d:'med'},
+      {q:"Which of these is NOT set in server.conf?",o:["Clustering mode","serverName","KV store settings","LINE_BREAKER"],a:[3],e:"<code>LINE_BREAKER</code> is a props.conf parsing setting.",d:'hard'},
+      {q:"Running <code>splunk edit cluster-config -mode manager ...</code> writes which file?",o:["indexes.conf","server.conf","outputs.conf","deploymentclient.conf"],a:[1],e:"Cluster config is stored in <b>server.conf</b>.",d:'hard'}]},
+    {icon:'📡',title:'deploymentclient.conf',tag:'admin',why:`It is constantly confused with serverclass.conf — same topic, opposite side.`,
+     body:`<p><b>deploymentclient.conf</b> lives <b>on the deployment client</b> (a forwarder) and makes it <b>poll a deployment server</b> for apps. Set with <code>splunk set deploy-poll &lt;mgr&gt;:8089</code>.</p>`,
+     example:`[deployment-client]\n\n[target-broker:deploymentServer]\ntargetUri = deploy-mgr:8089`,
+     gotcha:`<b>deploymentclient.conf = on the client (forwarder). serverclass.conf = on the server.</b> Opposite sides of the same relationship.`,doc:D+'Admin/Deploymentclientconf',
+     quiz:[
+      {q:"Which file makes a forwarder poll a deployment server?",o:["serverclass.conf","deploymentclient.conf","outputs.conf","server.conf"],a:[1],e:"<b>deploymentclient.conf</b>."},
+      {q:"deploymentclient.conf lives on the...",o:["Deployment server","Deployment client (forwarder)","Cluster manager","SHC captain"],a:[1],e:"It lives on the <b>client</b> being managed."},
+      {q:"Which CLI command writes deploymentclient.conf?",o:["<code>splunk set deploy-poll mgr:8089</code>","<code>splunk enable listen</code>","<code>splunk add forward-server</code>","<code>splunk apply cluster-bundle</code>"],a:[0],e:"<code>splunk set deploy-poll</code> points the client at its server.",d:'med'},
+      {q:"The <code>targetUri</code> points at the deployment server on which port?",o:["9997","8000","8089","8088"],a:[2],e:"The management port <b>8089</b>.",d:'med'},
+      {q:"Which is TRUE about deploymentclient.conf vs serverclass.conf?",o:["Both live on the server","deploymentclient on the client, serverclass on the server","Both live on the client","Both live on the indexer"],a:[1],e:"Client-side vs server-side of the same deployment relationship.",d:'hard'},
+      {q:"A forwarder is not pulling apps. Which is a valid cause?",o:["deploymentclient.conf <code>targetUri</code> is wrong/missing on the client","indexes.conf is misconfigured","props precedence","Wrong CHARSET"],a:[0],e:"A bad/missing <code>targetUri</code> stops the client from reaching its deployment server.",d:'hard'}]},
+    {icon:'🗂️',title:'serverclass.conf',tag:'admin',why:`It is the server-side twin of deploymentclient.conf and defines who gets which apps.`,
+     body:`<p><b>serverclass.conf</b> lives <b>on the deployment server</b>. A <b>server class</b> groups deployment clients (via <code>whitelist</code>/<code>blacklist</code> on clientName, host, IP, DNS) and maps them to <b>deployment apps</b>.</p>`,
+     example:`[serverClass:linux_fwd]\nwhitelist.0 = *linux*\n\n[serverClass:linux_fwd:app:Splunk_TA_nix]\nrestartSplunkd = true`,
+     gotcha:`Lives on the <b>server</b> (not the forwarder). After edits, run <code>splunk reload deploy-server</code>.`,doc:D+'Admin/Serverclassconf',
+     quiz:[
+      {q:"On a deployment server, what groups clients and maps them to apps?",o:["A server class","An index","A search head cluster","A license pool"],a:[0],e:"A <b>server class</b>."},
+      {q:"serverclass.conf lives on the...",o:["Forwarder","Deployment server","Indexer","Search head"],a:[1],e:"On the <b>deployment server</b>."},
+      {q:"Clients are matched into a server class using...",o:["whitelist/blacklist filters (clientName/host/IP/DNS)","Index name","Sourcetype","Role"],a:[0],e:"<b>whitelist/blacklist</b> filters select the clients.",d:'med'},
+      {q:"Which stanza maps an app to a server class?",o:["<code>[serverClass:NAME:app:APP]</code>","<code>[app:APP]</code>","<code>[deployment:APP]</code>","<code>[tcpout:APP]</code>"],a:[0],e:"<code>[serverClass:&lt;class&gt;:app:&lt;app&gt;]</code> assigns the app.",d:'med'},
+      {q:"To force clients to restart after receiving an app, set...",o:["<code>restartSplunkd = true</code>","<code>reload = true</code>","<code>restart = 1</code>","<code>disabled = false</code>"],a:[0],e:"<code>restartSplunkd = true</code> in the app stanza.",d:'hard'},
+      {q:"After editing serverclass.conf, which command makes the server re-read it?",o:["<code>splunk reload deploy-server</code>","<code>splunk apply cluster-bundle</code>","<code>splunk restart forwarder</code>","<code>splunk enable listen</code>"],a:[0],e:"<code>splunk reload deploy-server</code> re-reads apps and classes.",d:'hard'}]},
+    {icon:'🔑',title:'authentication.conf',tag:'admin',why:`It handles WHO you are and maps groups to roles — routinely confused with authorize.conf.`,
+     body:`<p><b>authentication.conf</b> sets the <b>authentication method</b> — <code>authType = Splunk | LDAP | SAML</code> — plus LDAP/SAML connection details and the <b>group-to-role mapping</b> (roleMap).</p>`,
+     example:`[authentication]\nauthType = SAML\n\n[roleMap_SAML]\nadmin = SplunkAdmins`,
+     gotcha:`<b>authentication = who you are; authorization (authorize.conf) = what you can do.</b> Role powers live in authorize.conf, not here.`,doc:D+'Admin/Authenticationconf',
+     quiz:[
+      {q:"Which file sets the authentication method (Splunk/LDAP/SAML)?",o:["authorize.conf","authentication.conf","server.conf","web.conf"],a:[1],e:"<b>authentication.conf</b>."},
+      {q:"Mapping external directory <b>groups</b> to Splunk <b>roles</b> is done in...",o:["authentication.conf","indexes.conf","props.conf","limits.conf"],a:[0],e:"The roleMap in <b>authentication.conf</b>."},
+      {q:"Which <code>authType</code> is used for SSO?",o:["Splunk","LDAP","SAML","Local"],a:[2],e:"<b>SAML</b> provides single sign-on.",d:'med'},
+      {q:"authentication.conf answers which question?",o:["What can you do","Who are you","Which index","How long a search runs"],a:[1],e:"Authentication = <b>who you are</b>; authorization = what you can do.",d:'med'},
+      {q:"A user authenticates via LDAP but has no permissions. Where are the role's capabilities/index access actually defined?",o:["authentication.conf","authorize.conf","server.conf","web.conf"],a:[1],e:"Authentication maps the user to a role; the role's powers live in <b>authorize.conf</b>.",d:'hard'},
+      {q:"Which setting is NOT in authentication.conf?",o:["LDAP bind DN","SAML idpSSOUrl","roleMap","srchIndexesAllowed"],a:[3],e:"<code>srchIndexesAllowed</code> belongs to a role in <b>authorize.conf</b>.",d:'hard'}]},
+    {icon:'🛡️',title:'authorize.conf',tag:'admin',why:`It defines WHAT a role can do and see — the other half of the auth pair.`,
+     body:`<p><b>authorize.conf</b> defines <b>roles</b> and their <b>capabilities</b>, plus data access: <code>srchIndexesAllowed</code> (which indexes), <code>srchFilter</code> (restrict within an index), <code>importRoles</code> (inherit), and quotas like <code>srchJobsQuota</code>.</p>`,
+     example:`[role_analyst]\nimportRoles = user\nsrchIndexesAllowed = web;security\nsrchFilter = source::*prod*`,
+     gotcha:`<code>srchIndexesAllowed</code> = which indexes (index-level). <code>srchFilter</code> = restrict to matching events <b>within</b> an index (needs a distinguishing field).`,doc:D+'Admin/Authorizeconf',
+     quiz:[
+      {q:"Roles and the capabilities assigned to them live in?",o:["authentication.conf","authorize.conf","server.conf","props.conf"],a:[1],e:"<b>authorize.conf</b>."},
+      {q:"A role is built from...",o:["Capabilities","Indexes","Sourcetypes","Tokens"],a:[0],e:"Roles are collections of <b>capabilities</b>."},
+      {q:"Which setting limits which <b>indexes</b> a role can search?",o:["srchFilter","srchIndexesAllowed","importRoles","srchJobsQuota"],a:[1],e:"<code>srchIndexesAllowed</code> controls index access.",d:'med'},
+      {q:"To restrict a role to only events matching a condition <b>within</b> an index, use...",o:["srchIndexesAllowed","srchFilter","blacklist","TRANSFORMS-"],a:[1],e:"<code>srchFilter</code> filters within an index.",d:'med'},
+      {q:"A role should inherit another role's capabilities. Which setting?",o:["importRoles","cloneRole","extendRole","srchFilter"],a:[0],e:"<code>importRoles</code> inherits capabilities from another role.",d:'hard'},
+      {q:"You want per-group data separation within a <b>shared</b> index (given a field that identifies the owner). Which authorize.conf mechanism enables it?",o:["srchIndexesAllowed","srchFilter","srchJobsQuota","importRoles"],a:[1],e:"<code>srchFilter</code> restricts within an index by a field; srchIndexesAllowed is index-level only.",d:'hard'}]},
+    {icon:'🚦',title:'limits.conf',tag:'core',why:`It quietly caps searches — the classic subsearch 10,000-result limit lives here.`,
+     body:`<p><b>limits.conf</b> sets search and resource limits: the <b>subsearch</b> caps (<code>maxout</code> = 10,000 results, plus a ~60s time limit), result-row limits, and concurrency. Raising them can strain memory/CPU.</p>`,
+     example:`[subsearch]\nmaxout = 10000\nmaxtime = 60`,
+     gotcha:`Subsearch defaults: <b>10,000 results</b> and <b>~60 seconds</b>, after which it is silently finalized (partial results).`,doc:D+'Admin/Limitsconf',
+     quiz:[
+      {q:"Search and resource limits (like the subsearch cap) live in?",o:["props.conf","limits.conf","server.conf","web.conf"],a:[1],e:"<b>limits.conf</b>."},
+      {q:"The default maximum number of results a subsearch returns is...",o:["1000","10000","50000","Unlimited"],a:[1],e:"<b>10,000</b> results by default."},
+      {q:"The default subsearch time limit before it is finalized is about...",o:["30 seconds","60 seconds","120 seconds","No limit"],a:[1],e:"About <b>60 seconds</b>.",d:'med'},
+      {q:"A subsearch silently returned incomplete results. The likely cause tuned in limits.conf is...",o:["The subsearch maxout/maxtime caps","CHARSET","repFactor","srchFilter"],a:[0],e:"Hitting <code>maxout</code>/<code>maxtime</code> finalizes the subsearch early.",d:'hard'},
+      {q:"Which stanza controls the subsearch result cap?",o:["<code>[search]</code>","<code>[subsearch]</code>","<code>[searchresults]</code>","<code>[join]</code>"],a:[1],e:"<code>[subsearch]</code> <code>maxout</code> sets the cap.",d:'hard'},
+      {q:"Raising limits.conf caps globally can...",o:["Have no effect","Risk memory/CPU exhaustion and slow the deployment","Reduce license usage","Delete data"],a:[1],e:"Higher caps consume more resources and can degrade performance.",d:'hard'}]},
+    {icon:'🌐',title:'web.conf',tag:'admin',why:`It governs the Splunk Web UI — and its port (8000) is a favorite mix-up with the management port (8089).`,
+     body:`<p><b>web.conf</b> configures <b>Splunk Web</b> (the UI): <code>httpport</code> (default <b>8000</b>), <code>enableSplunkWebSSL</code> (HTTPS for the UI), <code>startwebserver</code>, and <code>mgmtHostPort</code>.</p>`,
+     example:`[settings]\nhttpport = 8000\nenableSplunkWebSSL = true`,
+     gotcha:`Web UI port = <b>8000</b> (web.conf); management/REST port = <b>8089</b>. Don't confuse them.`,doc:D+'Admin/Webconf',
+     quiz:[
+      {q:"Splunk Web (the UI) settings like its port live in?",o:["server.conf","web.conf","inputs.conf","authorize.conf"],a:[1],e:"<b>web.conf</b>."},
+      {q:"The default Splunk Web port is...",o:["8089","8000","9997","8088"],a:[1],e:"<b>8000</b> is the default web UI port."},
+      {q:"To enable HTTPS for Splunk Web you set...",o:["<code>enableSplunkWebSSL = true</code>","<code>sslWeb = 1</code>","<code>https = on</code>","<code>forceSSL</code>"],a:[0],e:"<code>enableSplunkWebSSL = true</code> in web.conf.",d:'med'},
+      {q:"The web UI runs on 8000. Which port is the <b>management/REST</b> port?",o:["8000","8089","9997","514"],a:[1],e:"<b>8089</b> is the management/REST port.",d:'med'},
+      {q:"Which is TRUE about web.conf vs server.conf?",o:["web.conf = UI (8000)/web SSL; server.conf = serverName/clustering/mgmt","Both hold serverName","web.conf holds clustering","They are identical"],a:[0],e:"web.conf = the UI tier; server.conf = server identity and clustering.",d:'hard'},
+      {q:"You changed <code>httpport</code> to 8443 but the UI is still on 8000. Most likely you must...",o:["Do nothing, it updates live","Restart Splunk","Re-index all data","Buy a new license"],a:[1],e:"Web/port changes require a <b>restart</b> to take effect.",d:'hard'}]}
+  ];
+  CONFDEFS.forEach(c=>{CONCEPTS.push({icon:c.icon,title:c.title,tag:c.tag,why:c.why,body:c.body,example:c.example,gotcha:c.gotcha,doc:c.doc});CQUIZ.push(c.quiz);});
   const mastered=t=>store.conceptMastery&&store.conceptMastery[t];
   const cards=CONCEPTS.map((c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
     <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div>${CQUIZ[ci]&&CQUIZ[ci].length?`<div><button class="cquiz" data-i="${ci}">🎯 Test your mastery (${CQUIZ[ci].length} questions)</button></div>`:''}</div></details>`).join('');
@@ -1264,7 +1394,7 @@ function conceptQuiz(qs,title,masterKey){
     const cur=qs[qi],multi=cur.a.length>1;
     const opts=cur.o.map((o,i)=>`<label class="opt" data-i="${i}"><input type="${multi?'checkbox':'radio'}" name="o" value="${i}"><span>${o}</span><span class="kbd">${i+1}</span></label>`).join('');
     const v=$(`<div class="view">${topBar()}<button class="back" id="cqb">← Concepts</button>
-      <div class="glass qcard"><div class="qcat">🎯 ${title} · ${qi+1} / ${qs.length}</div>
+      <div class="glass qcard"><div class="qcat">🎯 ${title} · ${qi+1} / ${qs.length}${cur.d==='hard'?' · <span style="color:var(--accent)">🔥 Harder</span>':cur.d==='med'?' · ◆ Medium':''}</div>
         <p class="qtext">${cur.q}</p>${multi?`<p class="multi">✔ Select all that apply</p>`:''}
         <div class="opts" id="opts">${opts}</div><div id="ex"></div>
         <div class="qnav"><button id="submit">Submit answer</button><button id="next" class="ghost" style="display:none">${qi===qs.length-1?'See score →':'Next question →'}</button></div>
