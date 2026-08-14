@@ -1137,8 +1137,8 @@ function labMode(){
 }
 
 /* ============ CONCEPT MASTERY — deep-dive explainers ============ */
-function conceptsScreen(){
-  currentRender=conceptsScreen; S.onKey=null; try{clearTimer();}catch(e){}
+function conceptsScreen(openTitle){
+  currentRender=()=>conceptsScreen(openTitle); S.onKey=null; try{clearTimer();}catch(e){}
   const D='https://docs.splunk.com/Documentation/Splunk/latest/';
   const CONCEPTS=[
     {icon:'⚖️',title:'Config File Precedence',tag:'hardest',group:'conf',why:`There are <b>two</b> different orderings depending on context, and precedence decides which value actually &lsquo;wins&rsquo; when the same setting appears in multiple files.`,
@@ -1420,12 +1420,12 @@ function conceptsScreen(){
   ];
   CONFDEFS.forEach(c=>{CONCEPTS.push({icon:c.icon,title:c.title,tag:c.tag,group:'conf',why:c.why,body:c.body,example:c.example,gotcha:c.gotcha,doc:c.doc});CQUIZ.push(c.quiz);});
   const mastered=t=>store.conceptMastery&&store.conceptMastery[t];
-  const cardHTML=(c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
+  const cardHTML=(c,ci)=>`<details class="glass concept"${c.title===openTitle?' open data-open="1"':''}><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
     <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.analogy?`<div class="canalogy" style="background:rgba(96,165,250,.12);border-left:3px solid #60a5fa;border-radius:6px;padding:9px 12px;margin:9px 0;font-size:.87rem;line-height:1.55">🔗 <b>Analogy:</b> ${c.analogy}</div>`:''}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div>${CQUIZ[ci]&&CQUIZ[ci].length?`<div><button class="cquiz" data-i="${ci}">🎯 Test your mastery (${CQUIZ[ci].length} questions)</button></div>`:''}</div></details>`;
   const withIdx=CONCEPTS.map((c,ci)=>[c,ci]);
   const flat=withIdx.filter(([c])=>!c.group).map(([c,ci])=>cardHTML(c,ci)).join('');
-  const groupParent=(g,icon,title,tag,intro)=>{const kids=withIdx.filter(([c])=>c.group===g);if(!kids.length)return '';const done=kids.filter(([c])=>mastered(c.title)).length;
-    return `<details class="glass concept"><summary><span class="cico">${icon}</span><span class="ctitle">${title}</span><span class="ctag">${tag} · ${done}/${kids.length}</span></summary>
+  const groupParent=(g,icon,title,tag,intro)=>{const kids=withIdx.filter(([c])=>c.group===g);if(!kids.length)return '';const done=kids.filter(([c])=>mastered(c.title)).length;const hasOpen=kids.some(([c])=>c.title===openTitle);
+    return `<details class="glass concept"${hasOpen?' open':''}><summary><span class="cico">${icon}</span><span class="ctitle">${title}</span><span class="ctag">${tag} · ${done}/${kids.length}</span></summary>
     <div class="cbody"><div class="cwhy">🧠 ${intro}</div>
     <div class="confnest" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-left:8px;border-left:2px solid var(--hair)">${kids.map(([c,ci])=>cardHTML(c,ci)).join('')}</div></div></details>`;};
   const cards=flat
@@ -1440,9 +1440,10 @@ function conceptsScreen(){
   wireTop(v);
   v.querySelector('#cback').onclick=examInfo;
   v.querySelector('#quizall').onclick=()=>{const all=[];CQUIZ.forEach((arr,i)=>arr.forEach(q=>all.push(Object.assign({},q))));for(let i=all.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=all[i];all[i]=all[j];all[j]=t;}conceptQuiz(all,'All Concepts',null);};
-  const startLesson=(idx)=>{const n=CONCEPTS.length;const i=((idx%n)+n)%n;conceptQuiz(CQUIZ[i].map(q=>Object.assign({},q)),CONCEPTS[i].title,CONCEPTS[i].title,{label:CONCEPTS[(i+1)%n].title,go:()=>startLesson(i+1)});};
+  const startLesson=(idx)=>{const n=CONCEPTS.length;const i=((idx%n)+n)%n;const nextTitle=CONCEPTS[(i+1)%n].title;conceptQuiz(CQUIZ[i].map(q=>Object.assign({},q)),CONCEPTS[i].title,CONCEPTS[i].title,{label:nextTitle,go:()=>conceptsScreen(nextTitle)});};
   v.querySelectorAll('.cquiz').forEach(b=>{b.onclick=(e)=>{e.stopPropagation();e.preventDefault();startLesson(+b.dataset.i);};});
   show(v);
+  if(openTitle){const el=v.querySelector('[data-open]');if(el)setTimeout(()=>{try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){el.scrollIntoView();}},80);}
 }
 function conceptQuiz(qs,title,masterKey,next){
   currentRender=()=>conceptQuiz(qs,title,masterKey,next); S.onKey=null; try{clearTimer();}catch(e){}
