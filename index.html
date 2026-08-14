@@ -1141,7 +1141,7 @@ function conceptsScreen(){
   currentRender=conceptsScreen; S.onKey=null; try{clearTimer();}catch(e){}
   const D='https://docs.splunk.com/Documentation/Splunk/latest/';
   const CONCEPTS=[
-    {icon:'⚖️',title:'Config File Precedence',tag:'hardest',why:`There are <b>two</b> different orderings depending on context, and precedence decides which value actually &lsquo;wins&rsquo; when the same setting appears in multiple files.`,
+    {icon:'⚖️',title:'Config File Precedence',tag:'hardest',group:'conf',why:`There are <b>two</b> different orderings depending on context, and precedence decides which value actually &lsquo;wins&rsquo; when the same setting appears in multiple files.`,
      body:`<p>The one rule that&rsquo;s always true: <b>within a directory, <code>local</code> beats <code>default</code></b>. Never edit <code>default/</code> — upgrades overwrite it. Put changes in <code>local/</code>.</p>
      <p>Which <i>directory</i> wins depends on the context:</p>
      <table class="ctable"><tr><th>Context</th><th>Order (highest → lowest)</th><th>Used for</th></tr>
@@ -1154,7 +1154,7 @@ function conceptsScreen(){
      body:`<p>Priority ranges <b>1 (best) to 10 (worst)</b>; the default is <b>5</b>. When one event matches multiple event types, Splunk orders them by priority and the <b>best (lowest-number) event type&rsquo;s color</b> is the one displayed. Only one color shows per event.</p>`,
      example:`event matches:\n  critical_error  (priority 1)  ← WINS, its color displays\n  all_errors      (priority 5)`,
      gotcha:`Priority <b>1 beats priority 10</b>. If colors aren&rsquo;t showing as expected, check the priority numbers.`,doc:D+'Knowledge/Abouteventtypes'},
-    {icon:'🔧',title:'btool',tag:'must-know',why:`It shows the <b>merged, on-disk</b> configuration — not the running config and not any single file — so people misread what it&rsquo;s telling them.`,
+    {icon:'🔧',title:'btool',tag:'must-know',group:'conf',why:`It shows the <b>merged, on-disk</b> configuration — not the running config and not any single file — so people misread what it&rsquo;s telling them.`,
      body:`<p>Syntax: <code>splunk btool &lt;conf&gt; list [stanza] [--debug]</code>. It merges every layer of a <code>.conf</code> and prints the effective result. Add <code>--debug</code> to prefix each line with the <b>file it came from</b>. <code>splunk btool check</code> validates configs for errors.</p>`,
      example:`splunk btool inputs list --debug\n/opt/splunk/etc/apps/search/local/inputs.conf  [monitor:///var/log/web/access.log]\n/opt/splunk/etc/apps/search/local/inputs.conf  index = test\n/opt/splunk/etc/system/default/inputs.conf     _rcvbuf = 1572864`,
      gotcha:`btool reads <b>files on disk</b>, not what&rsquo;s loaded in memory — after editing a file you must <b>restart</b> for Splunk to actually use it.`,doc:D+'Troubleshooting/Usebtooltotroubleshootconfigurations'},
@@ -1172,7 +1172,7 @@ function conceptsScreen(){
      <tr><td><b>Trial</b></td><td>60-day Enterprise, then reverts to Free</td></tr></table>
      <p>The <b>license manager</b> holds the license; indexers are <b>license peers</b> that report daily usage to it. An Enterprise <b>violation</b> = more than <b>5 warnings</b> in a rolling <b>30-day</b> window.</p>`,
      gotcha:`License is measured on data <b>indexed per day</b>, not stored. Lower it by <b>filtering at ingest</b> (nullQueue / Ingest Actions) — deleting old data does nothing.`,doc:D+'Admin/HowSplunklicensingworks'},
-    {icon:'🔀',title:'Heavy vs Universal Forwarder',tag:'always-tested',why:`They look similar but differ in one decisive way: whether they parse.`,
+    {icon:'🔀',title:'Heavy vs Universal Forwarder',tag:'always-tested',group:'fwd',why:`They look similar but differ in one decisive way: whether they parse.`,
      body:`<table class="ctable"><tr><th></th><th>Universal Forwarder</th><th>Heavy Forwarder</th></tr>
      <tr><td>What it is</td><td>Lightweight agent</td><td>Full Splunk Enterprise (forwarding mode)</td></tr>
      <tr><td>Parses data?</td><td><b>No</b> — forwards mostly raw</td><td><b>Yes</b> — parse, filter, route</td></tr>
@@ -1185,7 +1185,7 @@ function conceptsScreen(){
      <ul><li><code>frozenTimePeriodInSecs</code> — freeze by <b>age</b></li><li><code>maxTotalDataSizeMB</code> — freeze by <b>size</b> (oldest first)</li></ul>
      <p>Whichever limit is hit <b>first</b> wins.</p>`,
      gotcha:`Frozen data is <b>deleted by default</b> — set <code>coldToFrozenDir</code> to archive it instead.`,doc:D+'Indexer/HowSplunkstoresindexes'},
-    {icon:'📡',title:'Deployment Server & Server Classes',tag:'admin',why:`Several moving parts (clients, apps, server classes) and a precedence catch that breaks central management.`,
+    {icon:'📡',title:'Deployment Server & Server Classes',tag:'admin',group:'fwd',why:`Several moving parts (clients, apps, server classes) and a precedence catch that breaks central management.`,
      body:`<p>The <b>deployment server</b> pushes <b>deployment apps</b> (staged in <code>etc/deployment-apps</code>) to <b>deployment clients</b> — forwarders that poll it (<code>splunk set deploy-poll mgr:8089</code>). A <b>server class</b> groups clients by filters and maps them to the apps they should receive. <code>splunk reload deploy-server</code> applies changes; clients pull on their next <b>phone-home</b>.</p>`,
      gotcha:`Settings in a client&rsquo;s <code>system/local</code> can&rsquo;t be overridden by a deployed app (system/local wins) — that&rsquo;s why you <b>delete the local outputs.conf</b> before managing forwarders centrally.`,doc:D+'Updating/Aboutdeploymentserver'},
     {icon:'⏱️',title:'Index-time vs Search-time',tag:'best-practice',why:`Deciding when a field is created affects storage, flexibility, and whether you can change it later.`,
@@ -1379,13 +1379,14 @@ function conceptsScreen(){
   const cardHTML=(c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
     <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div>${CQUIZ[ci]&&CQUIZ[ci].length?`<div><button class="cquiz" data-i="${ci}">🎯 Test your mastery (${CQUIZ[ci].length} questions)</button></div>`:''}</div></details>`;
   const withIdx=CONCEPTS.map((c,ci)=>[c,ci]);
-  const flat=withIdx.filter(([c])=>c.group!=='conf').map(([c,ci])=>cardHTML(c,ci)).join('');
-  const confKids=withIdx.filter(([c])=>c.group==='conf');
-  const confDone=confKids.filter(([c])=>mastered(c.title)).length;
-  const confParent=`<details class="glass concept"><summary><span class="cico">📂</span><span class="ctitle">Configuration Files</span><span class="ctag">objective 3 · ${confDone}/${confKids.length}</span></summary>
-    <div class="cbody"><div class="cwhy">🧠 <b>SPLK-1003 Objective 3, Configuration Files:</b> almost everything an admin does is written to a <code>.conf</code> file. Expand any file below for its explainer, worked example, and a tiered quiz.</div>
-    <div class="confnest" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-left:8px;border-left:2px solid var(--hair)">${confKids.map(([c,ci])=>cardHTML(c,ci)).join('')}</div></div></details>`;
-  const cards=flat+confParent;
+  const flat=withIdx.filter(([c])=>!c.group).map(([c,ci])=>cardHTML(c,ci)).join('');
+  const groupParent=(g,icon,title,tag,intro)=>{const kids=withIdx.filter(([c])=>c.group===g);if(!kids.length)return '';const done=kids.filter(([c])=>mastered(c.title)).length;
+    return `<details class="glass concept"><summary><span class="cico">${icon}</span><span class="ctitle">${title}</span><span class="ctag">${tag} · ${done}/${kids.length}</span></summary>
+    <div class="cbody"><div class="cwhy">🧠 ${intro}</div>
+    <div class="confnest" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-left:8px;border-left:2px solid var(--hair)">${kids.map(([c,ci])=>cardHTML(c,ci)).join('')}</div></div></details>`;};
+  const cards=flat
+    + groupParent('conf','📂','Configuration Files','objective 3',`<b>SPLK-1003 Objective 3, Configuration Files:</b> precedence, <code>btool</code>, and each <code>.conf</code> file. Expand any item for its explainer, worked example, and a tiered quiz.`)
+    + groupParent('fwd','🔀','Forwarders &amp; Deployment','objectives 10-11',`<b>Forwarders and forwarder management:</b> how data-collection agents are configured and centrally managed by the deployment server.`);
   const doneCount=CONCEPTS.filter(c=>mastered(c.title)).length;
   const v=$(`<div class="view">${topBar()}<button class="back" id="cback">← Back</button>
     <div class="brand" style="margin-bottom:12px"><div class="logo">📗</div><h1>Concept Mastery</h1><p>Read each explainer, then quiz yourself to prove you&rsquo;ve got it</p></div>
