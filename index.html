@@ -413,7 +413,7 @@ function applyTheme(){const t=store.theme;if(t==='auto')document.documentElement
 function cycleTheme(){store.theme=store.theme==='auto'?'dark':store.theme==='dark'?'light':'auto';saveStore();applyTheme();rerenderTop();}
 function themeIcon(){return store.theme==='auto'?'🌓':store.theme==='dark'?'🌙':'☀️';}
 let actx;
-function beep(ok){if(!store.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const now=actx.currentTime;
+function beep(ok){if(!store.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended'){try{actx.resume();}catch(e){}}const now=actx.currentTime;
   const note=(freq,start,dur,type,peak)=>{const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(.0001,now+start);g.gain.exponentialRampToValueAtTime(peak,now+start+.02);g.gain.exponentialRampToValueAtTime(.0001,now+start+dur);o.start(now+start);o.stop(now+start+dur+.03);};
   if(ok){/* bright ascending chime, Duolingo-style correct */ note(587.33,0,.13,'triangle',.12); note(880,.085,.15,'triangle',.13); note(1174.66,.18,.24,'triangle',.11);}
   else{/* soft low descending donk, Duolingo-style wrong */ note(207.65,0,.19,'sine',.17); note(155.56,.11,.30,'sine',.15);}
@@ -1158,7 +1158,7 @@ function conceptsScreen(){
      body:`<p>Syntax: <code>splunk btool &lt;conf&gt; list [stanza] [--debug]</code>. It merges every layer of a <code>.conf</code> and prints the effective result. Add <code>--debug</code> to prefix each line with the <b>file it came from</b>. <code>splunk btool check</code> validates configs for errors.</p>`,
      example:`splunk btool inputs list --debug\n/opt/splunk/etc/apps/search/local/inputs.conf  [monitor:///var/log/web/access.log]\n/opt/splunk/etc/apps/search/local/inputs.conf  index = test\n/opt/splunk/etc/system/default/inputs.conf     _rcvbuf = 1572864`,
      gotcha:`btool reads <b>files on disk</b>, not what&rsquo;s loaded in memory — after editing a file you must <b>restart</b> for Splunk to actually use it.`,doc:D+'Troubleshooting/Usebtooltotroubleshootconfigurations'},
-    {icon:'📥',title:'inputs.conf',tag:'core',why:`One file, many stanza types — and it&rsquo;s easy to confuse what belongs in inputs.conf vs outputs.conf.`,
+    {icon:'📥',title:'inputs.conf',tag:'core',group:'conf',why:`One file, many stanza types — and it&rsquo;s easy to confuse what belongs in inputs.conf vs outputs.conf.`,
      body:`<p><b>inputs.conf</b> defines what data Splunk <b>collects</b>, by stanza type:</p>
      <ul><li><code>[monitor://&lt;path&gt;]</code> — watch a file/dir</li><li><code>[splunktcp://9997]</code> — <b>receive</b> from forwarders (created by <code>splunk enable listen 9997</code>)</li><li><code>[tcp://&lt;port&gt;]</code> / <code>[udp://514]</code> — network inputs (e.g. syslog)</li><li><code>[script://&lt;path&gt;]</code> — scripted input</li></ul>
      <p>Common attributes: <code>index</code>, <code>sourcetype</code>, <code>host</code>, <code>disabled</code>.</p>`,
@@ -1192,7 +1192,7 @@ function conceptsScreen(){
      body:`<p><b>Index-time</b> (baked in at ingest): <code>host</code>, <code>source</code>, <code>sourcetype</code>, <code>_time</code>, and index-time extractions. Costly and <b>permanent</b> — changing them requires re-indexing.</p>
      <p><b>Search-time</b> (applied when you search): most field extractions, field aliases, calculated fields, lookups, event types, tags. Flexible — change any time, no re-index.</p>`,
      gotcha:`<b>Prefer search-time.</b> Index-time extractions bloat the index and can&rsquo;t be applied retroactively to already-indexed data.`,doc:D+'Knowledge/Aboutfields'},
-    {icon:'🗂️',title:'Config Files Reference',tag:'core',why:`A dozen <code>.conf</code> files each own one slice of Splunk — mixing up which file does what is a steady source of wrong answers.`,
+    {icon:'🗺️',title:'Config Files Reference',tag:'overview',group:'conf',why:`A dozen <code>.conf</code> files each own one slice of Splunk — mixing up which file does what is a steady source of wrong answers.`,
      body:`<p>Every setting lives in a <code>.conf</code> named for its job. The ones the exam expects you to recognize:</p>
      <table class="ctable"><tr><th>File</th><th>What it controls</th><th>Phase</th></tr>
      <tr><td><code>inputs.conf</code></td><td>What data to collect — monitor, tcp/udp, script, splunktcp receiver</td><td>input</td></tr>
@@ -1374,10 +1374,18 @@ function conceptsScreen(){
       {q:"Which is TRUE about web.conf vs server.conf?",o:["web.conf = UI (8000)/web SSL; server.conf = serverName/clustering/mgmt","Both hold serverName","web.conf holds clustering","They are identical"],a:[0],e:"web.conf = the UI tier; server.conf = server identity and clustering.",d:'hard'},
       {q:"You changed <code>httpport</code> to 8443 but the UI is still on 8000. Most likely you must...",o:["Do nothing, it updates live","Restart Splunk","Re-index all data","Buy a new license"],a:[1],e:"Web/port changes require a <b>restart</b> to take effect.",d:'hard'}]}
   ];
-  CONFDEFS.forEach(c=>{CONCEPTS.push({icon:c.icon,title:c.title,tag:c.tag,why:c.why,body:c.body,example:c.example,gotcha:c.gotcha,doc:c.doc});CQUIZ.push(c.quiz);});
+  CONFDEFS.forEach(c=>{CONCEPTS.push({icon:c.icon,title:c.title,tag:c.tag,group:'conf',why:c.why,body:c.body,example:c.example,gotcha:c.gotcha,doc:c.doc});CQUIZ.push(c.quiz);});
   const mastered=t=>store.conceptMastery&&store.conceptMastery[t];
-  const cards=CONCEPTS.map((c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
-    <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div>${CQUIZ[ci]&&CQUIZ[ci].length?`<div><button class="cquiz" data-i="${ci}">🎯 Test your mastery (${CQUIZ[ci].length} questions)</button></div>`:''}</div></details>`).join('');
+  const cardHTML=(c,ci)=>`<details class="glass concept"><summary><span class="cico">${c.icon}</span><span class="ctitle">${c.title}</span>${mastered(c.title)?'<span class="cq-badge">🏅 Mastered</span>':''}<span class="ctag">${c.tag}</span></summary>
+    <div class="cbody"><div class="cwhy">🧠 <b>Why it&rsquo;s tricky:</b> ${c.why}</div>${c.body}${c.example?`<div class="cex">${c.example}</div>`:''}${c.gotcha?`<div class="cgotcha">⚠️ ${c.gotcha}</div>`:''}<div class="doclink" style="margin-top:12px">📖 <a href="${c.doc}" target="_blank" rel="noopener">Read the official Splunk docs →</a></div>${CQUIZ[ci]&&CQUIZ[ci].length?`<div><button class="cquiz" data-i="${ci}">🎯 Test your mastery (${CQUIZ[ci].length} questions)</button></div>`:''}</div></details>`;
+  const withIdx=CONCEPTS.map((c,ci)=>[c,ci]);
+  const flat=withIdx.filter(([c])=>c.group!=='conf').map(([c,ci])=>cardHTML(c,ci)).join('');
+  const confKids=withIdx.filter(([c])=>c.group==='conf');
+  const confDone=confKids.filter(([c])=>mastered(c.title)).length;
+  const confParent=`<details class="glass concept"><summary><span class="cico">📂</span><span class="ctitle">Configuration Files</span><span class="ctag">objective 3 · ${confDone}/${confKids.length}</span></summary>
+    <div class="cbody"><div class="cwhy">🧠 <b>SPLK-1003 Objective 3, Configuration Files:</b> almost everything an admin does is written to a <code>.conf</code> file. Expand any file below for its explainer, worked example, and a tiered quiz.</div>
+    <div class="confnest" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-left:8px;border-left:2px solid var(--hair)">${confKids.map(([c,ci])=>cardHTML(c,ci)).join('')}</div></div></details>`;
+  const cards=flat+confParent;
   const doneCount=CONCEPTS.filter(c=>mastered(c.title)).length;
   const v=$(`<div class="view">${topBar()}<button class="back" id="cback">← Back</button>
     <div class="brand" style="margin-bottom:12px"><div class="logo">📗</div><h1>Concept Mastery</h1><p>Read each explainer, then quiz yourself to prove you&rsquo;ve got it</p></div>
@@ -1407,7 +1415,7 @@ function conceptQuiz(qs,title,masterKey){
     v.querySelectorAll('#opts .opt').forEach(o=>o.onclick=(e)=>{if(e.target.tagName==='INPUT')return;const inp=o.querySelector('input');if(multi)inp.checked=!inp.checked;else{v.querySelectorAll('#opts input').forEach(x=>x.checked=false);inp.checked=true;}});
     let answered=false;
     const grade=()=>{if(answered)return;const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);if(!picked.length)return;answered=true;
-      const ok=cur.a.slice().sort().join(',')===picked.slice().sort().join(',');if(ok)score++;
+      const ok=cur.a.slice().sort().join(',')===picked.slice().sort().join(',');if(ok)score++;beep(ok);
       v.querySelectorAll('#opts .opt').forEach(o=>{const i=+o.dataset.i;o.classList.add('disabled');o.querySelector('input').disabled=true;if(cur.a.includes(i))o.classList.add('correct');else if(picked.includes(i))o.classList.add('wrong');});
       v.querySelector('#ex').innerHTML=`<div class="glass explain"><div class="v">${ok?'✓ Correct':'✗ Not quite'}</div>${cur.e}</div>`;
       v.querySelector('#submit').style.display='none';const nx=v.querySelector('#next');nx.style.display='inline-block';nx.focus();};
