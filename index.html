@@ -582,9 +582,9 @@ function examInfo(){
     ${bank==='power'?`<div class="glass mode" data-m="review"><div class="mi">📖</div><div><b>Rapid Review</b><p>${REVIEW.length} quick facts, grouped by topic.</p></div><div class="arr">›</div></div>`:''}
     <div class="glass mode ${hasMissed?'':'dis'}" data-m="missed"><div class="mi">🔁</div><div><b>Review Missed</b><p>${hasMissed?`Re-quiz the ones you've missed.`:'Take a quiz first to unlock.'}</p></div>${hasMissed?'<div class="arr">›</div>':''}</div>
     ${flaggedCount?`<div class="glass mode" data-m="flagged"><div class="mi">⚑</div><div><b>Flagged</b><p>Revisit the ${flaggedCount} question${flaggedCount>1?'s':''} you flagged.</p></div><div class="arr">›</div></div>`:''}
-    <div class="glass mode" data-m="lab"><div class="mi">🧪</div><div><b>Guided Lab<span class="rectag">New</span></b><p>Hands-on data-admin labs: ssh between servers, run commands, auto-checked steps.</p></div><div class="arr">›</div></div>
+    <div class="glass mode" data-m="lab"><div class="mi">🧪</div><div><b>Guided Lab</b><p>Hands-on data-admin labs: ssh between servers, run commands, auto-checked steps.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="terminal"><div class="mi">🖥️</div><div><b>CLI Lab</b><p>Free-play simulated Splunk admin terminal.</p></div><div class="arr">›</div></div>
-    <div class="glass mode" data-m="concepts"><div class="mi">📗</div><div><b>Concept Mastery<span class="rectag">New</span></b><p>Deep-dive explainers for the trickiest topics: precedence, priority, btool, licensing, HF vs UF.</p></div><div class="arr">›</div></div>
+    <div class="glass mode" data-m="concepts"><div class="mi">📗</div><div><b>Concept Mastery</b><p>Deep-dive explainers for the trickiest topics: precedence, priority, btool, licensing, HF vs UF.</p></div><div class="arr">›</div></div>
     <div class="glass mode" data-m="appendix"><div class="mi">📚</div><div><b>Appendix</b><p>Browse all ${aq.length} questions with answers.</p></div><div class="arr">›</div></div>`;
   const v=$(`<div class="view">${topBar()}
     <button class="back">← All exams</button>
