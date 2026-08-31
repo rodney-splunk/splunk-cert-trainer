@@ -721,12 +721,12 @@ const EXAMS = [
     tagline:'License mgmt, indexers & search heads, data ingestion, platform admin.',
     about:'Validates day-to-day administration, configuration, monitoring, and data management of a Splunk Enterprise environment.',
     facts:['56 questions · 60 minutes','Prerequisite: Splunk Core Certified Power User','Result reported as pass or fail'] },
-  { id:'cloudadmin', name:'Splunk Cloud Certified Admin', level:'Professional',
-    status:'soon', minutes:75, realQ:60, icon:'☁️', color:'#3aa0ff', due:'Month 3', dueNote:'prereq: Power User',
+  { id:'cloudadmin', code:'SPLK-1005', name:'Splunk Cloud Certified Admin', level:'Professional',
+    status:'ready', minutes:75, realQ:60, icon:'☁️', color:'#3aa0ff', due:'Sep 4, 2026', dueNote:'Tech Trek Month 3',
     url:'https://www.splunk.com/en_us/training/certification-track/splunk-cloud-certified-admin.html',
-    tagline:'Data inputs, forwarder setup, user administration, troubleshooting.',
-    about:'Validates proficiency managing and configuring Splunk Cloud - data inputs, forwarder setup, user administration, monitoring, and problem isolation.',
-    facts:['60 questions · 75 minutes','Prerequisite: Splunk Core Certified Power User','Focused on the Splunk Cloud Platform'] },
+    tagline:'Cloud topology, ACS, getting data into Cloud, app vetting & Cloud Support.',
+    about:'Validates administration of Splunk Cloud Platform. This bank is a focused Cloud-vs-Enterprise DELTA - the topics that differ from SPLK-1003: Cloud overview & topology, config/admin access via ACS (no CLI), getting data into Cloud, index management, apps & vetting, and working with Cloud Support. The sections that mirror the Enterprise Admin exam (Monitor & Network inputs, parsing, manipulating raw data) are ~50% of the real exam - drill those in the SPLK-1003 Admin bank you already passed.',
+    facts:['60 questions · 75 minutes','Prerequisite: Splunk Core Certified Power User','$130 USD per attempt','~65% overlaps SPLK-1003 - this bank targets the Cloud delta'] },
   { id:'architect', name:'Splunk Enterprise Certified Architect', level:'Expert',
     status:'soon', minutes:90, realQ:85, icon:'🏛️', color:'#a45cf5', due:'Month 3+', dueNote:'prereq: Power User + Admin',
     url:'https://www.splunk.com/en_us/training/certification-track/splunk-enterprise-certified-architect.html',
@@ -898,4 +898,384 @@ const COMMANDS = [
  {cat:'Transforming', name:'sort', use:`Sorts results ascending or descending by a field; can limit the count.`, ex:`... | sort 100 -src_ip`, vs:'reverse', diff:`<b>sort</b> orders by a field (a <code>-</code> prefix means descending; ascending is the default). <b>reverse</b> just flips the current result order without regard to any field.`, d:SR+'Sort'},
  {cat:'Function', name:'values()', use:`Returns the unique values of a field, sorted, as a multivalue list.`, ex:`... | stats values(action) by user`, vs:'list()', diff:`<b>values()</b> returns <b>distinct</b> values, sorted alphabetically. <b>list()</b> returns <b>all</b> values in the order seen (up to 100), including duplicates.`, d:SR+'CommonStatsFunctions'},
  {cat:'Function', name:'count()', use:`Counts events, or occurrences of a specific field.`, ex:`... | stats count(action) as actions`, vs:'dc()', diff:`<b>count()</b> counts how many events (or field occurrences) there are. <b>dc()</b> counts the number of <b>distinct</b> values, ignoring duplicates.`, d:SR+'CommonStatsFunctions'},
+];
+
+/* ============ SPL DOJO — lessons + pipe challenges (authored, doc-verified) ============ */
+function SPL_LESSONS(SD,T){
+ const R=SD+'SearchReference/';
+ return [
+ /* ===== TIER 1 · FOUNDATIONS ===== */
+ {tier:1,icon:'🧵',title:'The Search Pipeline & the Pipe',tag:'start here',
+  why:`SPL runs <b>left → right</b>. The results of the command before a <code>|</code> become the <b>input</b> to the command after it. Everything else is a variation on this one idea.`,
+  body:`<p>A search is a <b>pipeline</b>. You start with events pulled from an index, then pass them through commands separated by the pipe character <code>|</code>. Each command reshapes the results and hands them to the next.</p>
+  <p>If your search doesn&rsquo;t begin with another generating command, an <b>implicit <code>search</code></b> is added at the front &mdash; that&rsquo;s why you can start by just typing keywords.</p>
+  <p>One consequence to burn in: once a <b>transforming</b> command like <code>stats</code> runs, your raw events are gone &mdash; you now have a <b>results table</b>, so any command after it works on rows, not events.</p>`,
+  analogy:`Like a <b>factory conveyor belt</b>: raw material enters, each station does one job and passes the piece along. Reorder the stations and you get a different product &mdash; order matters.`,
+  example:`index=web status=404\n| stats count by clientip\n| sort - count\n| head 10`,
+  gotcha:`Order matters. A transforming command (<code>stats</code>, <code>chart</code>, <code>top</code>) turns events into a table &mdash; you can&rsquo;t follow it with something that expects raw events.`,
+  doc:SD+'Search/Aboutthesearchlanguage',
+  quiz:[
+   {q:`In SPL, what does the pipe character <code>|</code> do?`,o:[`Runs two searches in parallel`,`Sends the output of the command on its left as the input to the command on its right`,`Comments out the rest of the line`,`Merges two indexes together`],a:[1],e:`The pipe feeds one command&rsquo;s results into the next &mdash; the core of SPL.`},
+   {q:`Given these events (newest first): ${T(['_time','status'],[['10:04','200'],['10:03','500'],['10:02','200'],['10:01','404']])} what does <code>... | head 2</code> return?`,o:[`The 2 oldest events (10:01, 10:02)`,`The 2 newest events (10:04, 10:03)`,`Only the status=200 events`,`A single row with count = 2`],a:[1],e:`<code>head</code> keeps the first N <i>results as they arrive</i> &mdash; newest first by default.`,d:'med'},
+   {q:`After a <code>stats</code> command runs, what is flowing down the pipe?`,o:[`The original raw events`,`A results table of calculated values &mdash; the raw events are gone`,`Nothing until you add <code>table</code>`,`The events plus a hidden count field`],a:[1],e:`<code>stats</code> is transforming: it collapses events into a table. Downstream commands see rows, not events.`,d:'med'},
+   {q:`What is the correct reading of <code>index=web | stats count by host | sort - count</code>?`,o:[`<code>sort</code> runs first, then <code>stats</code>`,`Retrieve web events → count per host → order by count descending`,`All three run independently`,`It&rsquo;s invalid &mdash; <code>stats</code> must be last`],a:[1],e:`Left to right: search, then aggregate, then sort. That&rsquo;s the pipeline.`}]},
+
+ {tier:1,icon:'🔤',title:'Keywords, Booleans & the implicit search',tag:'core',
+  why:`Bare terms are matched as keywords with an <b>implied AND</b>. Boolean operators must be <b>UPPERCASE</b>, and being specific beats wildcards.`,
+  body:`<p>Type <code>error fail</code> and Splunk looks for events containing <b>both</b> (AND is implied). Use <code>OR</code> and <code>NOT</code> &mdash; in <b>UPPERCASE</b> &mdash; to change that. Quote a phrase to match it exactly: <code>"connection refused"</code>.</p>
+  <p>Keyword <i>matching</i> is case-insensitive, but <b>field names are case-sensitive</b> (<code>status</code> &ne; <code>Status</code>). The most efficient searches are specific &mdash; avoid leading wildcards and broad negation.</p>`,
+  analogy:`Like a <b>search engine query box</b> with power-user operators: quotes for exact phrases, AND/OR/NOT to combine &mdash; but here the operators only count when they&rsquo;re shouting (uppercase).`,
+  example:`error OR fail NOT debug "connection refused"`,
+  gotcha:`Lowercase <code>or</code> is treated as a <b>search term</b>, not an operator. <code>AND</code>/<code>OR</code>/<code>NOT</code> must be uppercase.`,
+  doc:R+'Search',
+  quiz:[
+   {q:`Between two bare keywords like <code>error fail</code>, which Boolean is implied?`,o:[`OR`,`AND`,`NOT`,`XOR`],a:[1],e:`Space between terms means <b>AND</b> &mdash; both must be present.`},
+   {q:`How must Boolean operators be written to be treated as operators?`,o:[`lowercase`,`UPPERCASE`,`Either case works`,`In quotes`],a:[1],e:`<code>AND OR NOT</code> must be uppercase; lowercase <code>or</code> becomes a literal search term.`,d:'med'},
+   {q:`Which is the MOST efficient way to find failed logins?`,o:[`<code>*fail*</code>`,`<code>failed password</code>`,`<code>NOT success</code>`,`<code>fail OR error OR bad OR *</code>`],a:[1],e:`Specific keywords beat leading wildcards and broad negation, which force far more work.`,d:'med'},
+   {q:`In <code>sourcetype=access_* status=200</code>, the leading <code>search</code> command is…`,o:[`Required explicitly`,`Implicit &mdash; auto-added at the front`,`A syntax error`,`Only used inside subsearches`],a:[1],e:`Any pipeline not starting with another generating command gets an implicit <code>search</code>.`}]},
+
+ {tier:1,icon:'🏷️',title:'Fields & field-value pairs',tag:'core',
+  why:`Fields let you match <code>key=value</code> instead of scanning free text &mdash; and filtering on fields in the <b>base search</b> (before the first pipe) is fast because those fields are indexed.`,
+  body:`<p>Every event has <b>default fields</b>: <code>index</code>, <code>source</code>, <code>sourcetype</code>, <code>host</code>, and <code>_time</code>. Others are extracted from the data. Filter with comparisons: <code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&gt;=</code>.</p>
+  <p>Put field filters <b>in the base search</b> whenever possible &mdash; <code>index=web status=404</code> is far more efficient than pulling everything and filtering after a pipe.</p>`,
+  analogy:`Fields are the <b>columns of a spreadsheet</b>. Searching <code>status=404</code> checks one column &mdash; much faster than reading every word on the page.`,
+  example:`index=web status>=400 action=purchase`,
+  gotcha:`<b>Field names are case-sensitive.</b> <code>status</code> and <code>Status</code> are different fields &mdash; a classic reason a search &ldquo;returns nothing.&rdquo;`,
+  doc:SD+'Knowledge/Aboutfields',
+  quiz:[
+   {q:`Which of these is a <b>default</b> field on every event?`,o:[`clientip`,`sourcetype`,`action`,`status`],a:[1],e:`<code>index, source, sourcetype, host, _time</code> are default. The rest are extracted from the data.`},
+   {q:`A search for <code>Status=200</code> returns nothing, but the data clearly has 200s in a field called <code>status</code>. Why?`,o:[`Values are case-sensitive`,`<b>Field names are case-sensitive</b> &mdash; <code>Status</code> &ne; <code>status</code>`,`You must use <code>==</code>`,`200 must be quoted`],a:[1],e:`Field names are case-sensitive; the field is <code>status</code>, not <code>Status</code>.`,d:'hard'},
+   {q:`Where should <code>status=404</code> go for best performance?`,o:[`In the base search, before the first pipe`,`After a <code>| stats</code>`,`In a subsearch`,`It doesn&rsquo;t matter`],a:[0],e:`Filtering on indexed fields in the base search limits data off disk &mdash; the #1 optimization.`,d:'med'},
+   {q:`Given these events: ${T(['action','status'],[['purchase','200'],['purchase','404'],['addtocart','200']])} how many match <code>action=purchase status=200</code>?`,o:[`1`,`2`,`3`,`0`],a:[0],e:`Both conditions must hold (implied AND): only the first row qualifies.`,d:'med'}]},
+
+ {tier:1,icon:'🔍',title:'Filtering: where vs search',tag:'always-tested',
+  why:`<code>search</code> compares a field to a <b>literal</b> and uses indexed data; <code>where</code> evaluates an <b>expression</b> and can compare <b>one field to another</b>.`,
+  body:`<p>Use the base <code>search</code>/keywords to filter on literals (fast, indexed). Use <code>where</code> when you need an eval-style expression &mdash; especially comparing two fields.</p>
+  <table class="ctable"><tr><th></th><th><code>search</code></th><th><code>where</code></th></tr>
+  <tr><td>Compares</td><td>field to a literal value</td><td>full eval expressions</td></tr>
+  <tr><td>Field vs field?</td><td><b>No</b></td><td><b>Yes</b></td></tr>
+  <tr><td>Uses index?</td><td>Yes (fast)</td><td>Runs after retrieval</td></tr></table>
+  <p>Shape the output with <code>fields</code> (keep/drop columns), <code>table</code> (select + order columns for display), and <code>rename</code> (relabel a field).</p>`,
+  analogy:`<code>search</code> is the <b>Find box</b> (match a value). <code>where</code> is a <b>spreadsheet formula filter</b> &mdash; it can say &ldquo;keep rows where column A &gt; column B.&rdquo;`,
+  example:`index=web\n| where bytes_out > bytes_in\n| table _time host bytes_out\n| rename bytes_out AS "Egress bytes"`,
+  gotcha:`To compare <b>one field to another field</b>, you must use <code>where</code>. The base <code>search</code> only compares a field to a literal.`,
+  doc:R+'Where',
+  quiz:[
+   {q:`To keep only events where <code>bytes_out</code> is greater than <code>bytes_in</code> (two fields), use…`,o:[`<code>search bytes_out>bytes_in</code>`,`<code>where bytes_out>bytes_in</code>`,`<code>table bytes_out bytes_in</code>`,`<code>fields bytes_out</code>`],a:[1],e:`Only <code>where</code> evaluates a field-to-field expression; <code>search</code> compares a field to a literal.`,d:'med'},
+   {q:`What&rsquo;s the difference between <code>table</code> and <code>fields</code>?`,o:[`They&rsquo;re identical`,`<code>table</code> selects and orders columns for display; <code>fields</code> adds/removes fields (<code>+</code>/<code>-</code>)`,`<code>fields</code> is only for lookups`,`<code>table</code> sorts the rows`],a:[1],e:`<code>table</code> is a display selection with column order; <code>fields</code> includes/excludes fields in the result.`,d:'med'},
+   {q:`<code>| fields - _raw</code> does what?`,o:[`Keeps only <code>_raw</code>`,`Removes the <code>_raw</code> field from results`,`Renames <code>_raw</code>`,`Sorts by <code>_raw</code>`],a:[1],e:`<code>fields -</code> removes fields; <code>fields +</code> (or just <code>fields</code>) keeps them.`},
+   {q:`Which pipeline is redundant / wasteful?`,o:[`<code>index=web status=404 | stats count</code>`,`<code>index=web | search status=404 | stats count</code>`,`<code>index=web status=404 | table _time uri</code>`,`None are wasteful`],a:[1],e:`Filtering <code>status=404</code> after a pipe repeats work that belongs in the base search &mdash; move it before the first pipe.`,d:'hard'}]},
+
+ {tier:1,icon:'🧩',title:'The Command Types',tag:'exam favorite',
+  why:`Whether a command is <b>streaming</b>, <b>transforming</b>, <b>generating</b>, or <b>dataset-processing</b> decides <i>where</i> it runs and how fast your search is.`,
+  body:`<table class="ctable"><tr><th>Type</th><th>What it does</th><th>Runs on</th><th>Examples</th></tr>
+  <tr><td><b>Streaming</b></td><td>One event in → out; order-independent</td><td>Indexers (parallel, fast)</td><td><code>eval, where, fields, rex, rename</code></td></tr>
+  <tr><td><b>Transforming</b></td><td>Turns events into a results table (needed for charts)</td><td>Search head</td><td><code>stats, chart, timechart, top, rare</code></td></tr>
+  <tr><td><b>Generating</b></td><td>Produces results with no input; leading <code>|</code></td><td>Varies</td><td><code>tstats, inputlookup, makeresults</code></td></tr>
+  <tr><td><b>Dataset-processing</b></td><td>Needs the whole result set at once</td><td>Search head</td><td><code>sort, eventstats</code></td></tr></table>
+  <p>Streaming commands run <b>on the indexers in parallel</b>. The moment a transforming or dataset-processing command appears, remaining work moves to the <b>search head</b> and can&rsquo;t move back.</p>`,
+  analogy:`Streaming commands are jobs each <b>assembly station</b> can do on its own. Transforming/<code>sort</code> is work that needs <b>everything gathered at HQ</b> first &mdash; so you want to filter <i>before</i> shipping it all there.`,
+  example:`| tstats count where index=web by sourcetype   (generating: leading pipe)\nindex=web | stats count by status              (transforming)`,
+  gotcha:`Once a transforming/non-streaming command runs, the rest of the search is stuck on the search head. That&rsquo;s <b>why you filter early</b> &mdash; to keep work on the indexers.`,
+  doc:SD+'Search/Typesofcommands',
+  quiz:[
+   {q:`Which command is <b>transforming</b> (produces a results table)?`,o:[`<code>eval</code>`,`<code>stats</code>`,`<code>where</code>`,`<code>rex</code>`],a:[1],e:`<code>stats</code> collapses events into a table &mdash; the canonical transforming command.`,d:'med'},
+   {q:`A leading pipe, as in <code>| tstats ...</code>, marks which type of command?`,o:[`Streaming`,`Generating`,`Transforming`,`Dataset-processing`],a:[1],e:`Generating commands create their own results and start the pipeline with a leading <code>|</code>.`,d:'med'},
+   {q:`Why place transforming commands as late as possible?`,o:[`They&rsquo;re slower alphabetically`,`To keep streaming work parallelized on the indexers as long as possible`,`They require a license`,`They only run at night`],a:[1],e:`Transforming commands force work onto the search head; delaying them keeps more work distributed on indexers.`,d:'hard'},
+   {q:`Which is a <b>streaming</b> command that runs on the indexers?`,o:[`<code>sort</code>`,`<code>stats</code>`,`<code>eval</code>`,`<code>top</code>`],a:[2],e:`<code>eval</code> is distributable streaming (one event in/out); <code>sort/stats/top</code> are not.`,d:'med'}]},
+
+ /* ===== TIER 2 · REPORTING & EVAL ===== */
+ {tier:2,icon:'📊',title:'stats — the workhorse',tag:'must-master',
+  why:`<code>stats</code> aggregates events into a table using functions (<code>count, sum, avg, dc, values</code>) with an optional <code>BY</code> split &mdash; and it <b>drops the raw events</b>.`,
+  body:`<p>Syntax: <code>stats func(field) [AS name] by field</code>. Common functions: <code>count</code>, <code>sum</code>, <code>avg</code>, <code>min</code>/<code>max</code>, <code>dc</code> (distinct count), <code>values</code>/<code>list</code>.</p>
+  <p><code>BY</code> creates one row per group. After <code>stats</code>, only the fields named in the stats and BY clauses survive.</p>`,
+  analogy:`A <b>pivot table</b>: pick what to measure (the function) and what to group by (the BY field), and it rolls thousands of rows into a compact summary.`,
+  example:`index=web\n| stats count AS hits, dc(clientip) AS visitors by status`,
+  gotcha:`<code>dc()</code>/<code>distinct_count()</code> is <b>memory-heavy</b> on high-cardinality fields. And after <code>stats</code>, fields not in the stats/BY clause are gone.`,
+  doc:R+'Stats',
+  quiz:[
+   {q:`Given these events: ${T(['status'],[['200'],['200'],['404'],['200'],['500']])} what does <code>| stats count by status</code> return?`,o:[`One row: count = 5`,`200→3, 404→1, 500→1`,`200→3 only`,`200→2, 404→1, 500→1`],a:[1],e:`One row per distinct status, with its count.`,d:'med'},
+   {q:`What&rsquo;s the difference between <code>count</code> and <code>dc(field)</code>?`,o:[`Nothing`,`<code>count</code> counts events; <code>dc</code> counts <b>distinct values</b> of the field`,`<code>dc</code> counts events; <code>count</code> is distinct`,`<code>dc</code> only works on numbers`],a:[1],e:`<code>dc</code> = distinct count (unique values); <code>count</code> = how many events/occurrences.`,d:'med'},
+   {q:`After <code>... | stats count by host</code>, which fields are available downstream?`,o:[`Every original field`,`Only <code>host</code> and <code>count</code>`,`Only <code>_raw</code>`,`<code>host</code>, <code>count</code>, and <code>_time</code>`],a:[1],e:`Transforming commands keep only the stats output and BY fields.`,d:'hard'},
+   {q:`Given bytes values 100, 200, 700 across 3 events, what does <code>| stats sum(bytes)</code> return?`,o:[`3`,`333`,`1000`,`700`],a:[2],e:`<code>sum</code> adds them: 100+200+700 = 1000.`}]},
+
+ {tier:2,icon:'📈',title:'chart vs timechart',tag:'reporting',
+  why:`<code>timechart</code> always puts <b><code>_time</code> on the x-axis</b> and buckets by <code>span</code>. <code>chart</code> lets you pick <i>any</i> field for the x-axis with an optional split-by.`,
+  body:`<p><code>timechart span=1h count by host</code> → a time series, one line per host. <code>chart count over status by action</code> → x-axis = status, series = action.</p>
+  <p><code>span</code> (or <code>bin</code>) sets the bucket size (<code>1m</code>, <code>1h</code>, <code>1d</code>). <code>usenull=f</code> drops the &ldquo;no value&rdquo; series; <code>limit</code> caps the number of series.</p>`,
+  analogy:`<code>timechart</code> is a <b>line drawn over time automatically</b>. <code>chart</code> is a <b>blank graph where you pick both axes</b> yourself.`,
+  example:`index=web action=purchase\n| timechart span=1d count by status usenull=f`,
+  gotcha:`<code>timechart</code>&rsquo;s x-axis is <b>always <code>_time</code></b>. If you need a non-time x-axis, use <code>chart</code>. Don&rsquo;t overwrite <code>_time</code> with <code>eval</code> before a <code>timechart</code>.`,
+  doc:R+'Timechart',
+  quiz:[
+   {q:`Which command forces <code>_time</code> onto the x-axis?`,o:[`<code>chart</code>`,`<code>timechart</code>`,`<code>stats</code>`,`<code>top</code>`],a:[1],e:`<code>timechart</code> is time-series by definition; <code>chart</code> lets you choose the x-axis.`,d:'med'},
+   {q:`What does <code>span=1h</code> do in <code>timechart span=1h count</code>?`,o:[`Limits to 1 hour of data`,`Buckets results into 1-hour intervals`,`Runs for 1 hour`,`Keeps only the first hour`],a:[1],e:`<code>span</code> sets the size of each time bucket on the x-axis.`,d:'med'},
+   {q:`You need a bar chart with <b>product category</b> on the x-axis (not time). Which command?`,o:[`<code>timechart</code>`,`<code>chart</code>`,`<code>stats</code> only`,`<code>bin</code>`],a:[1],e:`A non-time x-axis calls for <code>chart ... over categoryId</code>.`,d:'hard'},
+   {q:`<code>timechart span=1d count by status</code> over 3 distinct statuses produces…`,o:[`One combined line`,`One column of counts`,`One series (line/column) per status`,`A single number`],a:[2],e:`The <code>by</code> clause splits the time series into one series per value.`,d:'med'}]},
+
+ {tier:2,icon:'🏆',title:'top & rare',tag:'reporting',
+  why:`<code>top</code> returns the most common values <b>with <code>count</code> and <code>percent</code> columns</b>; <code>rare</code> returns the least common. Both are transforming; default <code>limit</code> is 10.`,
+  body:`<p><code>top limit=5 clientip</code> → the 5 most frequent client IPs, each with a <code>count</code> and a <code>percent</code>. Add a <code>by</code> field to rank within groups. <code>rare</code> is the mirror image for outliers.</p>`,
+  analogy:`<code>top</code> is a <b>leaderboard</b> (who&rsquo;s #1); <code>rare</code> is the <b>long tail</b> (what almost never happens) &mdash; handy for spotting anomalies.`,
+  example:`index=web status=200\n| top limit=5 clientip`,
+  gotcha:`<code>top</code> automatically adds <b>both</b> a <code>count</code> and a <code>percent</code> column, and defaults to <code>limit=10</code> if you don&rsquo;t set one.`,
+  doc:R+'Top',
+  quiz:[
+   {q:`Which columns does <code>top</code> add by default?`,o:[`Only <code>count</code>`,`<code>count</code> and <code>percent</code>`,`<code>sum</code> and <code>avg</code>`,`<code>_time</code>`],a:[1],e:`<code>top</code> reports both the count and the percentage of the total.`,d:'med'},
+   {q:`With no <code>limit</code> specified, how many rows does <code>top</code> return?`,o:[`1`,`5`,`10`,`All of them`],a:[2],e:`Default <code>limit</code> is 10.`,d:'med'},
+   {q:`Given ${T(['clientip'],[['1.1.1.1'],['1.1.1.1'],['2.2.2.2'],['1.1.1.1'],['3.3.3.3']])} the first row of <code>| top limit=1 clientip</code> is…`,o:[`3.3.3.3 (count 1)`,`1.1.1.1 (count 3)`,`2.2.2.2 (count 1)`,`a tie`],a:[1],e:`<code>1.1.1.1</code> appears 3 times &mdash; the most common.`,d:'med'},
+   {q:`You want the <b>least</b> common user agents to spot anomalies. Use…`,o:[`<code>top</code>`,`<code>rare</code>`,`<code>sort ua</code>`,`<code>dedup ua</code>`],a:[1],e:`<code>rare</code> surfaces the least frequent values.`}]},
+
+ {tier:2,icon:'🧮',title:'eval — if / case / coalesce',tag:'must-master',
+  why:`<code>eval</code> creates or overwrites a field from an expression. Know <code>if()</code>, <code>case()</code> (returns the first true branch), and <code>coalesce()</code> (first non-null) &mdash; and use <code>==</code> for comparison.`,
+  body:`<p><code>if(condition, trueval, falseval)</code>. <code>case(c1,v1, c2,v2, ...)</code> returns the value for the first true condition &mdash; add <code>true(),"default"</code> as the catch-all. <code>coalesce(a,b,c)</code> returns the first value that isn&rsquo;t null.</p>
+  <p>Inside <code>eval</code>, <code>=</code> assigns and <code>==</code> compares.</p>`,
+  analogy:`A <b>spreadsheet formula cell</b>: <code>=IF(...)</code> and nested <code>IFS()</code>. <code>case()</code> is the <code>IFS</code>, and <code>true()</code> is the final &ldquo;otherwise&rdquo; branch.`,
+  example:`... | eval level=case(status>=500,"server_error",\n                      status>=400,"client_error",\n                      true(),"ok")`,
+  gotcha:`<code>case()</code> returns <b>NULL if no condition matches</b> &mdash; people forget the <code>true(),"default"</code> branch and silently lose values.`,
+  doc:R+'Eval',
+  quiz:[
+   {q:`What does <code>case()</code> return when <b>no</b> condition matches?`,o:[`0`,`An empty string`,`NULL`,`The last value`],a:[2],e:`Without a <code>true(),"default"</code> catch-all, <code>case()</code> yields NULL.`,d:'hard'},
+   {q:`For status=403, what does <code>eval x=case(status>=500,"a", status>=400,"b", true(),"c")</code> set <code>x</code> to?`,o:[`"a"`,`"b"`,`"c"`,`NULL`],a:[1],e:`403 fails the first test but passes <code>&gt;=400</code> → the first true branch wins → "b".`,d:'med'},
+   {q:`<code>coalesce(user, username, "unknown")</code> returns…`,o:[`All three joined`,`The first value that is not null`,`Always "unknown"`,`An error if any is null`],a:[1],e:`<code>coalesce</code> returns the first non-null argument.`,d:'med'},
+   {q:`Inside <code>eval</code>, which operator <b>compares</b> two values?`,o:[`<code>=</code>`,`<code>==</code>`,`<code>:=</code>`,`<code>eq</code>`],a:[1],e:`<code>=</code> assigns; <code>==</code> compares. Mixing them up is a common bug.`,d:'med'}]},
+
+ {tier:2,icon:'✂️',title:'rex — search-time field extraction',tag:'always-tested',
+  why:`<code>rex</code> pulls <b>new fields</b> out of text using named capture groups <code>(?&lt;name&gt;...)</code>, or masks values in <code>sed</code> mode. It runs streaming and doesn&rsquo;t touch the index.`,
+  body:`<p><code>rex field=_raw "..."</code> extracts fields at search time &mdash; no re-indexing. <code>mode=sed</code> does substitution (e.g. masking). <code>max_match=0</code> allows multiple matches (a multivalue field).</p>
+  <p>Related but different: the <code>regex</code> command only <b>filters</b> events; <code>erex</code> <b>generates</b> a regex from examples you provide.</p>`,
+  analogy:`A <b>highlighter that labels what it grabs</b>: you mark a pattern in the raw text and Splunk saves each captured piece into a named field.`,
+  example:`... | rex field=_raw "user=(?&lt;user&gt;\\w+)"\n... | rex field=card mode=sed "s/\\d(?=\\d{4})/X/g"`,
+  gotcha:`<code>rex</code> <b>extracts/replaces</b>; the <code>regex</code> command only <b>keeps/drops</b> events. Don&rsquo;t confuse them by name.`,
+  doc:R+'Rex',
+  quiz:[
+   {q:`What&rsquo;s the difference between <code>rex</code> and the <code>regex</code> command?`,o:[`They&rsquo;re the same`,`<code>rex</code> extracts/replaces fields; <code>regex</code> only filters events`,`<code>regex</code> extracts; <code>rex</code> filters`,`<code>rex</code> only works at index time`],a:[1],e:`<code>rex</code> creates fields (or substitutes); <code>regex</code> is a keep/drop filter.`,d:'hard'},
+   {q:`Which is the correct named-capture syntax in <code>rex</code>?`,o:[`<code>(?P=name)</code>`,`<code>(?&lt;name&gt;...)</code>`,`<code>{name:...}</code>`,`<code>$name$</code>`],a:[1],e:`Splunk uses PCRE named groups: <code>(?&lt;name&gt;pattern)</code>.`,d:'med'},
+   {q:`You don&rsquo;t know the regex &mdash; you just have example values to extract. Which command helps?`,o:[`<code>rex</code>`,`<code>erex</code> (generates a regex from examples)`,`<code>regex</code>`,`<code>extract</code>`],a:[1],e:`<code>erex</code> builds a regex from your examples; copy it into <code>rex</code> for production.`,d:'med'},
+   {q:`<code>rex ... mode=sed "s/\\d/X/g"</code> is typically used to…`,o:[`Extract a new field`,`Mask/anonymize values in place`,`Filter events`,`Sort results`],a:[1],e:`<code>sed</code> mode substitutes text &mdash; common for masking sensitive data.`,d:'med'}]},
+
+ {tier:2,icon:'🔗',title:'lookup — enrichment',tag:'core',
+  why:`<code>lookup</code> matches event fields against a table (CSV/KV store) and <b>adds fields</b>. <code>OUTPUT</code> overwrites; <code>OUTPUTNEW</code> only fills where a field is missing.`,
+  body:`<p><code>lookup http_status code AS status OUTPUT description</code> adds a <code>description</code> for each status. <code>inputlookup</code> reads a table <i>as events</i> (a generating command); <code>outputlookup</code> writes results to a table.</p>
+  <p>Performance tip: enrich <b>after</b> a transforming command so you match a few rows, not every raw event.</p>`,
+  analogy:`A <b>VLOOKUP</b>: match a key against a reference sheet and pull in the extra columns.`,
+  example:`... | stats count by status\n| lookup http_status code AS status OUTPUT description`,
+  gotcha:`<code>OUTPUT</code> <b>overwrites</b> an existing field; <code>OUTPUTNEW</code> only writes when the field is <b>absent</b>. Choosing wrong can clobber good data.`,
+  doc:R+'Lookup',
+  quiz:[
+   {q:`Difference between <code>OUTPUT</code> and <code>OUTPUTNEW</code>?`,o:[`None`,`<code>OUTPUT</code> overwrites existing fields; <code>OUTPUTNEW</code> only fills where the field is missing`,`<code>OUTPUTNEW</code> overwrites; <code>OUTPUT</code> fills gaps`,`<code>OUTPUTNEW</code> is for CSV only`],a:[1],e:`<code>OUTPUTNEW</code> is the safe &ldquo;don&rsquo;t clobber&rdquo; option.`,d:'hard'},
+   {q:`<code>| inputlookup users.csv</code> does what?`,o:[`Writes results to users.csv`,`Reads the lookup table&rsquo;s rows as events (generating)`,`Deletes the lookup`,`Enriches current events`],a:[1],e:`<code>inputlookup</code> loads a table as a result set &mdash; useful in subsearches.`,d:'med'},
+   {q:`Why run <code>lookup</code> <b>after</b> a <code>stats</code>?`,o:[`It&rsquo;s required`,`To enrich a few summary rows instead of every raw event &mdash; faster`,`Lookups don&rsquo;t work on events`,`To avoid a license warning`],a:[1],e:`Matching fewer rows means less work &mdash; a documented optimization.`,d:'med'},
+   {q:`To save your current results into a reusable CSV lookup, use…`,o:[`<code>inputlookup</code>`,`<code>outputlookup</code>`,`<code>outputcsv</code> only`,`<code>collect</code>`],a:[1],e:`<code>outputlookup</code> writes results to a CSV/KV lookup table.`}]},
+
+ {tier:2,icon:'🪄',title:'sort / head / dedup — shaping results',tag:'core',
+  why:`<code>sort</code> orders results (<b>ascending by default</b>; <code>-</code> = descending) and can limit; <code>head</code>/<code>tail</code> take the first/last N; <code>dedup</code> removes duplicate field values.`,
+  body:`<p><code>sort - count</code> = highest first. <code>sort num(field)</code> forces numeric sort. <code>head 10</code> keeps the first 10; <code>tail</code> the last. <code>dedup host</code> keeps the <b>first</b> event per host in the current order.</p>
+  <p><code>sort</code> and <code>dedup</code> are non-streaming &mdash; they need the whole set, so place them <b>late</b>.</p>`,
+  analogy:`<code>sort</code> reorders the deck, <code>head</code> takes the top cards, <code>dedup</code> throws out duplicate cards &mdash; keeping the first of each it sees.`,
+  example:`... | stats count by clientip\n| sort - count\n| head 10`,
+  gotcha:`<code>sort</code> defaults to <b>ascending</b> &mdash; use <code>-</code> for descending. <code>dedup</code> keeps the <b>first</b> match in the current order, so <code>sort</code> first when you want &ldquo;latest.&rdquo;`,
+  doc:R+'Sort',
+  quiz:[
+   {q:`What is <code>sort</code>&rsquo;s default order?`,o:[`Descending`,`Ascending`,`Random`,`By <code>_time</code>`],a:[1],e:`Ascending by default; prefix a field with <code>-</code> for descending.`,d:'med'},
+   {q:`<code>... | sort - count | head 5</code> returns…`,o:[`The 5 smallest counts`,`The 5 largest counts`,`5 random rows`,`All rows sorted`],a:[1],e:`<code>- count</code> = descending, then <code>head 5</code> takes the top 5.`,d:'med'},
+   {q:`<code>dedup host</code> keeps which event per host?`,o:[`The last one`,`The first one in the current order`,`A random one`,`All of them`],a:[1],e:`<code>dedup</code> keeps the first occurrence &mdash; order matters, so sort first for &ldquo;latest.&rdquo;`,d:'hard'},
+   {q:`Given rows sorted newest→oldest, to keep each user&rsquo;s <b>latest</b> event you would…`,o:[`<code>dedup user</code> after sorting newest-first`,`<code>dedup user</code> after sorting oldest-first`,`<code>head user</code>`,`<code>stats last(user)</code>`],a:[0],e:`<code>dedup</code> keeps the first row seen; sort newest-first so &ldquo;first&rdquo; = latest.`,d:'hard'}]},
+
+ /* ===== TIER 3 · ADVANCED & OPTIMIZATION ===== */
+ {tier:3,icon:'📐',title:'stats vs eventstats vs streamstats',tag:'advanced',
+  why:`<code>stats</code> collapses events into a table; <code>eventstats</code> adds the aggregate <b>back onto every event</b> (events kept); <code>streamstats</code> computes a <b>running</b> aggregate <b>in event order</b>.`,
+  body:`<table class="ctable"><tr><th>Command</th><th>Keeps events?</th><th>Result</th></tr>
+  <tr><td><code>stats</code></td><td>No</td><td>Summary table</td></tr>
+  <tr><td><code>eventstats</code></td><td><b>Yes</b></td><td>Each event + group aggregate</td></tr>
+  <tr><td><code>streamstats</code></td><td>Yes</td><td>Each event + <b>running</b> aggregate</td></tr></table>
+  <p>Use <code>eventstats</code> to compare each event to its group (e.g. <code>bytes &gt; avg</code>). Use <code>streamstats</code> for running totals / moving averages.</p>`,
+  analogy:`<code>stats</code> = the <b>summary report</b>. <code>eventstats</code> = <b>stamp the group total on every row</b>. <code>streamstats</code> = a <b>running checkbook balance</b>, computed line by line.`,
+  example:`eventtype=error\n| eventstats avg(bytes) AS avg\n| where bytes > avg`,
+  gotcha:`<code>streamstats</code> is <b>order-dependent</b> &mdash; <code>sort</code> first or the running values are meaningless. <code>eventstats</code> keeps events; <code>stats</code> does not.`,
+  doc:R+'Eventstats',
+  quiz:[
+   {q:`Which command keeps every event AND adds a group aggregate to each?`,o:[`<code>stats</code>`,`<code>eventstats</code>`,`<code>chart</code>`,`<code>top</code>`],a:[1],e:`<code>eventstats</code> augments events without collapsing them.`,d:'hard'},
+   {q:`Which command is <b>order-dependent</b> (results depend on sort order)?`,o:[`<code>stats</code>`,`<code>eventstats</code>`,`<code>streamstats</code>`,`<code>dc</code>`],a:[2],e:`<code>streamstats</code> computes running values in the order events arrive &mdash; sort first.`,d:'hard'},
+   {q:`You want to keep each event but flag those above the <b>overall</b> average in one pass. Use…`,o:[`<code>stats avg</code>`,`<code>eventstats avg</code> then <code>where</code>`,`<code>timechart avg</code>`,`<code>top</code>`],a:[1],e:`<code>eventstats</code> writes the average onto every event so you can compare per-event.`,d:'med'},
+   {q:`The key output difference between <code>stats</code> and <code>eventstats</code>?`,o:[`<code>stats</code> keeps events, <code>eventstats</code> doesn&rsquo;t`,`<code>stats</code> returns a summary table; <code>eventstats</code> returns events + aggregate`,`They&rsquo;re identical`,`<code>eventstats</code> only does counts`],a:[1],e:`<code>stats</code> collapses; <code>eventstats</code> annotates.`,d:'med'}]},
+
+ {tier:3,icon:'⚡',title:'tstats & data model acceleration',tag:'advanced',
+  why:`<code>tstats</code> runs over <b>indexed <code>.tsidx</code> data</b> or accelerated data-model summaries &mdash; dramatically faster than <code>stats</code> over raw events &mdash; but it only sees <b>indexed fields</b>.`,
+  body:`<p><code>| tstats count where index=web by sourcetype</code> reads precomputed indexed data instead of decompressing raw events. Against an accelerated data model: <code>| tstats count FROM datamodel=Authentication by _time span=1h</code>.</p>
+  <p><code>summariesonly=true</code> returns <b>only</b> summarized data &mdash; fast, but excludes recent events not yet summarized.</p>`,
+  analogy:`Reading the <b>pre-built index at the back of a book</b> instead of re-reading every page. Blazing fast &mdash; but only for the terms someone already indexed.`,
+  example:`| tstats count where index=web by sourcetype\n| tstats summariesonly=t count FROM datamodel=Network_Traffic by _time span=1h`,
+  gotcha:`<code>tstats</code> can only reference <b>indexed fields</b> (not search-time extractions), and <code>summariesonly=true</code> silently <b>omits recent, not-yet-summarized data</b>.`,
+  doc:R+'Tstats',
+  quiz:[
+   {q:`Why is <code>tstats</code> so fast?`,o:[`It samples 1% of data`,`It reads indexed <code>.tsidx</code> / accelerated summaries instead of raw events`,`It skips the search head`,`It caches your last search`],a:[1],e:`It queries precomputed indexed data rather than scanning raw events.`,d:'med'},
+   {q:`Which fields can <code>tstats</code> operate on?`,o:[`Any search-time extracted field`,`Only <b>indexed</b> fields`,`Only <code>_raw</code>`,`Only lookup fields`],a:[1],e:`<code>tstats</code> is limited to indexed fields &mdash; a key constraint.`,d:'hard'},
+   {q:`What&rsquo;s the risk of <code>summariesonly=true</code>?`,o:[`It&rsquo;s slower`,`It can miss recent data that hasn&rsquo;t been summarized yet`,`It doubles license use`,`It requires a restart`],a:[1],e:`You trade completeness for speed &mdash; recent unsummarized events are excluded.`,d:'hard'},
+   {q:`A <code>tstats</code> search must begin with…`,o:[`<code>search</code>`,`A leading pipe <code>|</code> (it&rsquo;s generating)`,`<code>index=</code>`,`<code>eval</code>`],a:[1],e:`<code>tstats</code> is a generating command &mdash; it starts the pipeline.`,d:'med'}]},
+
+ {tier:3,icon:'🔀',title:'transaction vs stats correlation',tag:'advanced',
+  why:`<code>transaction</code> groups related events into one multivalue event (adding <code>duration</code> and <code>eventcount</code>) but is <b>expensive</b>. Stats-based correlation by a shared id is usually faster and preferred.`,
+  body:`<p><code>transaction clientip maxspan=30s</code> stitches events into sessions with <code>duration</code>/<code>eventcount</code>. Constraints: <code>maxspan</code>, <code>maxpause</code>, <code>startswith</code>/<code>endswith</code>.</p>
+  <p>When you only need grouping metrics, <code>stats</code> is faster: <code>stats range(_time) AS duration count BY session_id</code>.</p>`,
+  analogy:`<code>transaction</code> <b>staples a session&rsquo;s pages together</b> into one document. Stats-by-id just <b>tallies by a ticket number</b> &mdash; lighter when you don&rsquo;t need the stapled pages.`,
+  example:`... | transaction session maxspan=10m maxpause=2m\n... | stats range(_time) AS dur count BY session`,
+  gotcha:`<code>transaction</code> is <b>memory-heavy and time-ordered</b>. Prefer <code>stats</code> unless you specifically need raw events grouped, or <code>startswith</code>/<code>endswith</code> boundaries.`,
+  doc:SD+'Search/Abouttransactions',
+  quiz:[
+   {q:`Which two fields does <code>transaction</code> add?`,o:[`<code>count</code> and <code>percent</code>`,`<code>duration</code> and <code>eventcount</code>`,`<code>_time</code> and <code>_raw</code>`,`<code>sum</code> and <code>avg</code>`],a:[1],e:`Each transaction gets a <code>duration</code> and an <code>eventcount</code>.`,d:'med'},
+   {q:`Why does Splunk generally recommend <code>stats</code> over <code>transaction</code>?`,o:[`<code>stats</code> is prettier`,`<code>stats</code> is faster and less memory-intensive for most grouping`,`<code>transaction</code> is deprecated`,`<code>stats</code> keeps raw events`],a:[1],e:`<code>transaction</code> is costly; stats-by-id handles most grouping more efficiently.`,d:'hard'},
+   {q:`When is <code>transaction</code> the <b>right</b> tool?`,o:[`Always`,`When you need start/end boundaries (<code>startswith</code>/<code>endswith</code>) or the grouped raw events`,`For simple counts`,`For time charts`],a:[1],e:`Its unique value is boundary-based grouping and keeping the member events.`,d:'med'},
+   {q:`<code>transaction</code> requires events to be…`,o:[`In no particular order`,`Time-ordered`,`Pre-aggregated`,`From one sourcetype`],a:[1],e:`It relies on time order; reordering events beforehand breaks <code>maxspan</code>/<code>maxpause</code>.`,d:'hard'}]},
+
+ {tier:3,icon:'🧷',title:'subsearches & join — limits & alternatives',tag:'advanced',
+  why:`A subsearch in <code>[ ]</code> runs <b>first</b> and feeds the outer search, but is capped (~<b>10,000 results / 60s</b>). <code>join</code> is SQL-like but its right side caps at ~50,000 &mdash; both truncate <b>silently</b>.`,
+  body:`<p>Subsearch: <code>index=fw [search index=threat | top 1 ip | fields ip]</code> &mdash; the inner search computes a value, the outer uses it. Trim with <code>fields</code>/<code>table</code>.</p>
+  <p>Splunk pushes <b>alternatives to <code>join</code></b>: <code>stats by</code> a shared field, or <code>lookup</code> when one side is static. They scale better and don&rsquo;t truncate.</p>`,
+  analogy:`A subsearch is a <b>lookup you compute on the fly</b>; <code>join</code> is a <b>SQL join with a size limit</b> &mdash; exceed it and rows vanish without warning.`,
+  example:`index=fw [search index=threat | top 1 src_ip | fields src_ip]\n(prefer) ... | stats values(x) by user   (instead of join)`,
+  gotcha:`Both silently truncate: subsearch at <b>~10k results / 60s</b>, join right side at <b>~50k</b>. No error &mdash; the outer result just becomes wrong. Prefer <code>stats</code>/<code>lookup</code>.`,
+  doc:SD+'Search/Aboutsubsearches',
+  quiz:[
+   {q:`Default subsearch limits are approximately…`,o:[`1,000 results / 30s`,`10,000 results / 60s`,`50,000 results / 120s`,`Unlimited`],a:[1],e:`Subsearches cap around 10,000 results and 60 seconds.`,d:'hard'},
+   {q:`Why is hitting a subsearch/join cap dangerous?`,o:[`Splunk crashes`,`It fails <b>silently</b> with partial results, so the outer search looks fine but is wrong`,`It deletes data`,`It logs you out`],a:[1],e:`No error is raised &mdash; the result is quietly incomplete.`,d:'hard'},
+   {q:`The preferred alternative to <code>join</code> for combining data on a shared field is…`,o:[`<code>append</code>`,`<code>stats by</code> the shared field (or <code>lookup</code>)`,`<code>transaction</code>`,`Another <code>join</code>`],a:[1],e:`<code>stats</code>/<code>lookup</code> scale better and avoid silent truncation.`,d:'med'},
+   {q:`In <code>outer [ inner ]</code>, which runs first?`,o:[`The outer search`,`The inner subsearch`,`They run together`,`Whichever is smaller`],a:[1],e:`The subsearch executes first; its result parameterizes the outer search.`,d:'med'}]},
+
+ {tier:3,icon:'🧬',title:'Multivalue fields',tag:'advanced',
+  why:`A field can hold <b>multiple values</b>. <code>mvexpand</code> explodes them into one event per value; <code>makemv</code> splits a string into a multivalue field; MV functions like <code>mvcount</code>/<code>mvindex</code> operate on them.`,
+  body:`<p><code>values(x)</code> and some extractions produce multivalue fields. <code>makemv delim="," recipients</code> turns <code>"a,b,c"</code> into three values. <code>mvexpand recipients</code> then makes three separate events. <code>mvcount</code>, <code>mvindex</code> (negative index counts from the end), <code>mvjoin</code>, and <code>split</code> manipulate them.</p>`,
+  analogy:`A spreadsheet <b>cell containing a list</b>. <code>mvexpand</code> is &ldquo;unmerge into separate rows,&rdquo; one per list item.`,
+  example:`... | makemv delim="," recipients\n| mvexpand recipients\n| stats count by recipients`,
+  gotcha:`<code>mvexpand</code> <b>multiplies your event count</b> (N values → N events) &mdash; it can blow up memory. Filter down first.`,
+  doc:R+'Mvexpand',
+  quiz:[
+   {q:`What does <code>mvexpand field</code> do?`,o:[`Joins values into one string`,`Creates one event per value in the multivalue field`,`Counts the values`,`Removes duplicates`],a:[1],e:`It explodes a multivalue field into separate events.`,d:'med'},
+   {q:`<code>makemv delim="," field</code> is used to…`,o:[`Merge events`,`Split a single field into a multivalue field on a delimiter`,`Count values`,`Sort values`],a:[1],e:`<code>makemv</code> turns a delimited string into multiple values.`,d:'med'},
+   {q:`The main risk of <code>mvexpand</code> on a large field is…`,o:[`It&rsquo;s deprecated`,`Event multiplication → high memory use`,`It changes <code>_time</code>`,`It needs a license`],a:[1],e:`N values per event become N events &mdash; watch memory; filter first.`,d:'hard'},
+   {q:`Which function returns how many values a multivalue field holds?`,o:[`<code>mvindex</code>`,`<code>mvcount</code>`,`<code>mvjoin</code>`,`<code>dc</code>`],a:[1],e:`<code>mvcount</code> returns the number of values.`,d:'med'}]},
+
+ {tier:3,icon:'🚦',title:'Search best practices',tag:'optimization',
+  why:`The whole game is <b>limiting data off disk and filtering early</b>: narrow the time range, specify <code>index</code>/<code>sourcetype</code>, filter in the <b>base search</b>, drop fields early, and put transforming commands late.`,
+  body:`<p>Splunk&rsquo;s core principles boil down to: retrieve only what you need, move as little data as possible, and filter as early as possible.</p>
+  <ul><li><b>Narrow time</b> &mdash; the single biggest lever.</li><li><b>Specify <code>index</code>/<code>sourcetype</code></b> &mdash; never search <code>index=*</code>.</li><li><b>Filter before the first pipe</b> on indexed fields.</li><li><b><code>fields</code> early</b> to drop unneeded columns.</li><li><b>Transforming commands late</b>; avoid leading wildcards, big <code>OR</code> lists, and <code>NOT</code>.</li></ul>
+  <p>The classic &ldquo;tale of two searches&rdquo;: moving a filter before the first pipe cut events from a million to a few hundred thousand &mdash; same results, a fraction of the work.</p>`,
+  analogy:`<b>Pack light and check IDs at the door</b> &mdash; don&rsquo;t carry the whole crowd upstairs and sort them out afterward.`,
+  example:`# slow\nindex=* | search sourcetype=web status=404\n# fast\nindex=web sourcetype=web status=404`,
+  gotcha:`The biggest wins are <b>narrowing the time range</b> and <b>filtering in the base search</b> (before the first pipe). Everything else is secondary.`,
+  doc:SD+'Search/Writebettersearches',
+  quiz:[
+   {q:`Which search is more efficient?`,o:[`<code>index=* | search sourcetype=web status=404</code>`,`<code>index=web sourcetype=web status=404</code>`,`They&rsquo;re identical`,`The first &mdash; wildcards are faster`],a:[1],e:`Filtering in the base search (and naming the index) limits data off disk; filtering after a pipe repeats work.`,d:'hard'},
+   {q:`What is the single biggest optimization lever?`,o:[`Renaming fields`,`Narrowing the time range and filtering in the base search`,`Adding more <code>OR</code> clauses`,`Using <code>NOT</code>`],a:[1],e:`Time range + base-search filtering cut the data scanned more than anything else.`,d:'med'},
+   {q:`Why place <code>where</code> before <code>eval</code> when possible?`,o:[`<code>eval</code> requires it`,`So the calculation runs on fewer events`,`It&rsquo;s alphabetical`,`To avoid errors`],a:[1],e:`Filtering first means <code>eval</code> computes over a smaller set &mdash; less work.`,d:'hard'},
+   {q:`Why is a leading wildcard like <code>*error</code> discouraged?`,o:[`It&rsquo;s a syntax error`,`It can&rsquo;t use the index efficiently, forcing a costly scan`,`It only matches uppercase`,`It&rsquo;s deprecated`],a:[1],e:`Leading wildcards defeat indexed term lookup &mdash; use specific terms.`,d:'med'}]}
+ ];
+}
+function SPL_PIPES(){
+ return [
+  {goal:`Count web errors (status 400+) per status code, highest first.`,
+   bank:[`index=web status>=400`,`stats count by status`,`sort - count`,`eval status=status+1`],
+   answer:[`index=web status>=400`,`stats count by status`,`sort - count`],
+   e:`Filter in the base search, aggregate, then sort descending. The <code>eval</code> segment was a decoy &mdash; it doesn&rsquo;t belong.`},
+  {goal:`Show the top 5 client IPs, then add their geographic location.`,
+   bank:[`index=web`,`top limit=5 clientip`,`iplocation clientip`,`dedup clientip`],
+   answer:[`index=web`,`top limit=5 clientip`,`iplocation clientip`],
+   e:`Search → rank the top 5 → enrich with <code>iplocation</code>. <code>dedup</code> would defeat the counting.`},
+  {goal:`Chart the number of purchases per hour over time.`,
+   bank:[`index=web action=purchase`,`timechart span=1h count`,`sort _time`],
+   answer:[`index=web action=purchase`,`timechart span=1h count`],
+   e:`<code>timechart</code> already buckets by <code>_time</code> &mdash; no separate <code>sort _time</code> needed.`},
+  {goal:`Extract a "user" field from the raw text, then count events per user.`,
+   bank:[`index=app`,`rex field=_raw "user=(?&lt;user&gt;\\w+)"`,`stats count by user`,`table user`],
+   answer:[`index=app`,`rex field=_raw "user=(?&lt;user&gt;\\w+)"`,`stats count by user`],
+   e:`You must extract the field with <code>rex</code> before you can group by it. <code>table user</code> would drop the count.`},
+  {goal:`Find each host&rsquo;s average response time, keeping only slow hosts (avg > 2s).`,
+   bank:[`index=web`,`stats avg(rtime) AS art by host`,`where art>2`,`search art>2`],
+   answer:[`index=web`,`stats avg(rtime) AS art by host`,`where art>2`],
+   e:`<code>art</code> is a computed field, so filter it with <code>where</code> (not the base <code>search</code>) after <code>stats</code>.`}
+ ];
+}
+
+/* ===================== SPLK-1005 Cloud Admin — Cloud-vs-Enterprise DELTA bank ===================== */
+const CL_GDI="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/get-data-into-splunk-cloud-platform/introduction-to-getting-data-in";
+const CL_FWD="https://help.splunk.com/en/splunk-cloud-platform/get-data-in/get-started-with-getting-data-in/10.5.2605/introduction/use-forwarders-to-get-data-into-splunk-cloud-platform";
+const CL_UFRECV="https://help.splunk.com/en/splunk-cloud-platform/forward-and-process-data/universal-forwarder-manual/10.4/configure-the-universal-forwarder/enable-a-receiver-for-the-splunk-cloud-platform";
+const CL_NIX="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/get-data-into-splunk-cloud-platform/get-nix-data-into-splunk-cloud-platform";
+const CL_HEC="https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/10.5.2605/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web";
+const CL_EXP="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/get-started-managing-splunk-cloud-platform/determine-your-splunk-cloud-platform-experience";
+const CL_MANIDX="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/manage-your-indexes-and-data-in-splunk-cloud-platform/manage-splunk-cloud-platform-indexes";
+const CL_DDAA="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/manage-your-indexes-and-data-in-splunk-cloud-platform/store-expired-splunk-cloud-platform-data-in-a-splunk-managed-archive";
+const CL_DELETE="https://help.splunk.com/en/splunk-cloud-platform/search/search-reference/10.5.2605/search-commands/delete";
+const CL_CMC="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/monitor-your-splunk-cloud-platform-deployment/use-the-overview-dashboard";
+const CL_ACS="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.5.2605/welcome-to-the-admin-config-service-acs/about-the-admin-config-service-acs-api";
+const CL_ACSREF="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.5.2605/admin-config-service-acs-api-endpoint-reference";
+const CL_ACSCLI="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.5.2605/administer-splunk-cloud-platform-using-the-admin-config-service-acs-cli/administer-splunk-cloud-platform-using-the-acs-cli";
+const CL_ACSLIM="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.5.2605/administer-splunk-cloud-platform-using-the-admin-config-service-acs-api/manage-limits.conf-configurations-in-splunk-cloud-platform";
+const CL_INSTALL="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/manage-apps-and-add-ons-in-splunk-cloud-platform/install-apps-on-your-splunk-cloud-platform-deployment";
+const CL_PRIVAPP="https://help.splunk.com/en/splunk-cloud-platform/administer/admin-manual/10.5.2605/manage-apps-and-add-ons-in-splunk-cloud-platform/manage-private-apps-on-your-splunk-cloud-platform-deployment";
+const CL_SUPPORT="https://www.splunk.com/en_us/customer-success/support-programs/platform-security-observability-support.html";
+
+Object.assign(CATEGORIES, {
+  cloudover:   {name:'Cloud Overview & Topology', weight:10, doc:CL_GDI, blurb:'Shared responsibility, no CLI/filesystem access, Self-Service vs Managed, and the Victoria vs Classic experience.'},
+  cloudgdi:    {name:'Getting Data Into Cloud', weight:15, doc:CL_FWD, blurb:'Forwarder to Cloud (splunkclouduf.spl), UF vs HF, the IDM, and HEC on Cloud.'},
+  cloudidx:    {name:'Index Management in Cloud', weight:10, doc:CL_MANIDX, blurb:'Create indexes in Web/ACS, retention, DDSS vs DDAA, deleting data, and the CMC.'},
+  cloudconf:   {name:'Config & Admin Access (ACS)', weight:8, doc:CL_ACS, blurb:'No .conf editing: Splunk Web, the Admin Config Service, sc_admin, and the limits.conf subset.'},
+  cloudapps:   {name:'Apps & Private Apps', weight:10, doc:CL_INSTALL, blurb:'Self-service install, AppInspect vetting, private apps, and premium (ES/ITSI) via Support.'},
+  cloudsupport:{name:'Working with Cloud Support', weight:5, doc:CL_SUPPORT, blurb:'Self-triage with the CMC, the Support Portal, severity tiers, and what needs Support.'},
+  cloudfwd:    {name:'Forwarder Management (Cloud)', weight:5, doc:CL_FWD, blurb:'The customer-hosted deployment server and pushing the credentials package to forwarders.'},
+});
+const CLOUD_CAT_ORDER = ['cloudover','cloudgdi','cloudidx','cloudconf','cloudapps','cloudsupport','cloudfwd'];
+
+const CLOUD_QUESTIONS = [
+ /* --- Cloud Overview & Topology --- */
+ {exam:"cloudadmin",cat:"cloudover",q:"In Splunk Cloud Platform, which does <b>Splunk</b> manage rather than the customer?",o:["The indexers, search heads, and platform upgrades","The universal forwarders installed on customer hosts","The customer's deployment server","The data inputs on customer-owned servers"],a:[0],e:"Splunk manages the indexing/search tier and platform <b>upgrades</b> (shared-responsibility model). The customer manages forwarders, their own inputs, and (if used) their own deployment server.",d:CL_GDI},
+ {exam:"cloudadmin",cat:"cloudover",q:"A Cloud admin needs to change a setting that on-prem would mean editing a <code>.conf</code> file. In Splunk Cloud Platform they must instead use…",o:["SSH to the search head and edit the file","Splunk Web, the ACS API/CLI, or a Support ticket","<code>btool</code> on the indexer","The universal forwarder"],a:[1],e:"Cloud gives <b>no filesystem/CLI access</b>. Configuration changes go through <b>Splunk Web</b>, the <b>Admin Config Service (ACS)</b>, or a <b>Support ticket</b> for anything not self-serviceable.",d:CL_ACSCLI},
+ {exam:"cloudadmin",cat:"cloudover",q:"What is the Admin Config Service (ACS) in Splunk Cloud Platform?",o:["A cloud-native API/CLI for self-service admin tasks without a Support ticket","A replacement for the universal forwarder","The Cloud Monitoring Console","A premium security app"],a:[0],e:"<b>ACS</b> is a cloud-native API (and CLI/Terraform provider) for <b>self-service</b> administration — indexes, HEC tokens, IP allow lists, limits, users, apps — without opening a Support ticket.",d:CL_ACS},
+ {exam:"cloudadmin",cat:"cloudover",q:"How does an admin find whether their stack is the <b>Victoria</b> or <b>Classic</b> experience, and who controls it?",o:["Splunk Web &gt; Support &amp; Services &gt; About; Splunk assigns it and customers cannot change it themselves","Edit server.conf; the customer sets it","It's on the login page; Support toggles it on request","Run <code>splunk version</code>; it switches automatically"],a:[0],e:"Check <b>Support &amp; Services &gt; About</b> in Splunk Web. <b>Splunk assigns</b> the experience; customers can't switch it themselves.",d:CL_EXP,hard:true},
+ {exam:"cloudadmin",cat:"cloudover",q:"On which Splunk Cloud experience do scripted and modular inputs run <b>directly on the search head</b>, with <b>no separate IDM required</b>?",o:["Classic","Victoria","Both","Neither — an IDM is always required"],a:[1],e:"<b>Victoria</b> runs scripted/modular inputs on the search head (no IDM). <b>Classic</b> requires a separate <b>Inputs Data Manager (IDM)</b> for those inputs.",d:CL_GDI,hard:true},
+ {exam:"cloudadmin",cat:"cloudover",q:"Which task is <b>NOT</b> something a Splunk Cloud admin performs themselves?",o:["Creating an index","Installing a self-service Splunkbase app","Applying Splunk Cloud Platform version upgrades to the indexers","Managing users and roles"],a:[2],e:"<b>Splunk manages platform upgrades.</b> The admin self-services indexes, apps, users, and inputs — but not the underlying indexer/search-head upgrades.",d:CL_GDI},
+ {exam:"cloudadmin",cat:"cloudover",q:"Which is a supported method for getting data into Splunk Cloud Platform?",o:["Forwarders, HEC, apps/add-ons, and the Inputs Data Manager (IDM)","Only universal forwarders","FTP upload directly to the indexer","SSH in and edit inputs.conf on the indexer"],a:[0],e:"The four supported paths are <b>forwarders, HTTP Event Collector (HEC), apps/add-ons, and the IDM</b>.",d:CL_GDI},
+ /* --- Getting Data Into Cloud (highest weight) --- */
+ {exam:"cloudadmin",cat:"cloudgdi",q:"To connect a universal forwarder to Splunk Cloud, an admin downloads a package. What is it and where is it obtained?",o:["<code>splunkclouduf.spl</code>, from Splunk Web &gt; Apps &gt; Universal Forwarder &gt; Download Universal Forwarder Credentials","<code>outputs.conf</code>, emailed by Splunk Support","A license file from the license manager","<code>indexes.conf</code>, from Splunkbase"],a:[0],e:"The <b>Universal Forwarder Credentials</b> package <code>splunkclouduf.spl</code> is downloaded from the <b>Universal Forwarder app</b> in Splunk Web.",d:CL_UFRECV},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"What does the <code>splunkclouduf.spl</code> credentials package contain?",o:["A Splunk app with <code>outputs.conf</code> and the TLS certificates to authenticate to your Cloud stack","A universal forwarder installer","A copy of your indexed data","A SAML metadata file"],a:[0],e:"It's a Splunk <b>app</b> bundling <b>outputs.conf + TLS certs</b> so the forwarder connects and authenticates to your Cloud indexers.",d:CL_UFRECV},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"After copying <code>splunkclouduf.spl</code> to a forwarder, how do you apply it?",o:["Run <code>splunk install app splunkclouduf.spl</code>, then restart the forwarder","Double-click it in Splunk Web on the indexer","Hand-edit it into system/local/outputs.conf","Upload it through HEC"],a:[0],e:"<b>Install it as an app</b> (<code>splunk install app ...</code>) and <b>restart</b> the forwarder; it lands under <code>etc/apps</code>.",d:CL_UFRECV},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"To send <b>parsed (event-based)</b> data to Splunk Cloud indexers, which is required?",o:["A universal forwarder on its own","A heavy forwarder or an IDM","HEC only","A deployment server"],a:[1],e:"A <b>UF forwards unparsed data</b>. Sending <b>parsed/event data</b> to Cloud requires a <b>heavy forwarder or IDM</b>.",d:CL_FWD,hard:true},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"Which port must typically be open in the firewall for a <b>forwarder</b> to send data to Splunk Cloud Platform?",o:["8000","8089","9997","514"],a:[2],e:"<b>9997</b> is the default S2S receiving/forwarding port (Cloud enables the receiver by default). Don't confuse it with HEC on Cloud, which uses 443.",d:CL_NIX},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"On Splunk Cloud Platform, the default HTTP Event Collector (HEC) port is…",o:["8088","443","9997","8089"],a:[1],e:"Cloud HEC uses <b>443</b> (versus <b>8088</b> on Splunk Enterprise and Cloud free trials).",d:CL_HEC,hard:true},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"A developer's HEC requests to Splunk Cloud (AWS) fail. They used <code>https://mystack.splunkcloud.com</code>. What's wrong?",o:["Cloud HEC requires the <code>http-inputs-</code> prefix, e.g. <code>http-inputs-mystack.splunkcloud.com</code>","HEC is disabled by default on Cloud","They must use port 8088","HEC only accepts UDP"],a:[0],e:"Cloud HEC URIs need the <b><code>http-inputs-</code></b> prefix (AWS) or data never reaches HEC.",d:CL_HEC,hard:true},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"What is the Inputs Data Manager (IDM)?",o:["A Splunk-hosted component for scripted/modular (e.g. cloud API) inputs, removing customer-managed forwarder infrastructure","A customer-run deployment server","The Cloud Monitoring Console","A premium security app"],a:[0],e:"The <b>IDM</b> is Splunk-hosted for scripted/modular inputs. Required on <b>Classic</b>; not needed on <b>Victoria</b> (those inputs run on the SH).",d:CL_GDI},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"Which statement about the IDM is TRUE?",o:["It supports HEC inputs and self-service app install","It fully replaces a heavy forwarder because it parses data","It cannot do HEC, self-service app install, or receive unencrypted TCP, and does not parse like an HF","It is included on the Free Trial"],a:[2],e:"The IDM has <b>no HEC</b>, <b>no self-service app install</b> (Support uploads your app), no unencrypted TCP, isn't an HF replacement, and isn't on the Free Trial.",d:CL_GDI,hard:true},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"After installing the credentials package, how do you verify a forwarder is sending to Cloud?",o:["Search in Splunk Web (e.g. a test index) and confirm the forwarder's host and expected sourcetypes appear","Look for a green light on the indexer","Run <code>btool</code> on the Cloud indexer","Call Support to confirm"],a:[0],e:"Verify by <b>searching</b> and confirming the forwarder's <b>host</b> and expected <b>sourcetypes</b> arrive. Best practice: point at a <b>test index</b> first.",d:CL_NIX},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"Which <code>outputs.conf</code> setting enables automatic TLS certificate renewal for forwarders to Splunk Cloud, and what is its default?",o:["<code>autoCertRotation = true</code>; default is <b>false</b> (off)","<code>sslRenew = on</code>; default true","<code>certRotate = auto</code>; default true","There is none — certs never expire"],a:[0],e:"<b><code>autoCertRotation = true</code></b> in the <code>[tcpout:&lt;group&gt;]</code> stanza; it's <b>off by default</b> and needs UF 9.3.0+ to Cloud 9.2.2406+.",d:CL_UFRECV,hard:true},
+ {exam:"cloudadmin",cat:"cloudgdi",q:"An admin wants to aggregate data through a middle tier before it reaches Cloud, to limit internet-facing hosts. What is this and the recommended ratio?",o:["An intermediate forwarding tier of heavy forwarders; 2:1 or greater intermediate forwarders to Cloud indexers","A second IDM; 1:1","A deployment server tier; 5:1","HEC relays; 10:1"],a:[0],e:"An <b>intermediate forwarding tier</b> (HFs) aggregates data; Splunk recommends <b>2:1 or greater</b> intermediate forwarders to Cloud indexers.",d:CL_FWD,hard:true},
+ /* --- Index Management in Cloud --- */
+ {exam:"cloudadmin",cat:"cloudidx",q:"How does a Splunk Cloud admin create a new index?",o:["Edit <code>indexes.conf</code> in <code>etc/system/local</code>","In Splunk Web (Settings &gt; Indexes &gt; New Index) or via the ACS API","SSH to an indexer and run a CLI command","Only by opening a Support ticket"],a:[1],e:"Cloud indexes are created in <b>Splunk Web</b> or via the <b>ACS API</b> — never by editing <code>indexes.conf</code> on disk.",d:CL_MANIDX},
+ {exam:"cloudadmin",cat:"cloudidx",q:"Which two settings govern per-index data retention in Splunk Cloud?",o:["<code>frozenTimePeriodInSecs</code> and <code>coldToFrozenDir</code>","Max raw data size and Searchable retention (days)","Hot and warm bucket counts","License volume and user count"],a:[1],e:"In Cloud you set <b>Max raw data size</b> and <b>Searchable retention (days)</b>; whichever hits first rolls/deletes data by <b>whole buckets, oldest first</b>.",d:CL_MANIDX},
+ {exam:"cloudadmin",cat:"cloudidx",q:"What is the difference between Dynamic Data Self-Storage (DDSS) and Dynamic Data Active Archive (DDAA)?",o:["DDSS moves expired data to the customer's own cloud storage (not searchable in Cloud); DDAA is a Splunk-managed archive you can restore and search","They are identical","DDSS is Splunk-managed; DDAA is customer-managed","Both keep data searchable in Cloud indefinitely"],a:[0],e:"<b>DDSS</b> = your own S3/GCS/Azure (not searchable in Cloud). <b>DDAA</b> = Splunk-managed archive, restorable. They <b>cannot both be active</b> on one index.",d:CL_DDAA,hard:true},
+ {exam:"cloudadmin",cat:"cloudidx",q:"After restoring data from a Dynamic Data Active Archive (DDAA), how long is it searchable and does it count against your license?",o:["Searchable for 30 days (fixed), and it does NOT count against license or index retention","Permanently searchable, and it counts against license","24 hours only","Until you delete it, and it counts against license"],a:[0],e:"Restored DDAA data is searchable for <b>30 days (fixed, unchangeable)</b> and does <b>not</b> count against license/retention. The restore itself can take up to 24 hours.",d:CL_DDAA,hard:true},
+ {exam:"cloudadmin",cat:"cloudidx",q:"Which is TRUE about removing data in Splunk Cloud?",o:["You SSH in and delete the bucket files","The <code>delete</code> search command frees disk space","Deleting an index removes all its data and is irreversible; the <code>delete</code> command only marks events unsearchable and does not free disk space","You can delete default and third-party indexes from the Indexes page"],a:[2],e:"There's no filesystem access. <b>Deleting an index</b> is final; the <b><code>delete</code></b> command (needs <code>delete_by_keyword</code>/<code>can_delete</code>) only makes events <b>unsearchable</b> and doesn't reclaim disk.",d:CL_DELETE,hard:true},
+ {exam:"cloudadmin",cat:"cloudidx",q:"Which is TRUE about internal indexes (e.g. <code>_internal</code>, <code>_audit</code>) in Splunk Cloud?",o:["Their retention period cannot be modified","You can delete them from the Indexes page","They do not exist in Cloud","Their retention is unlimited and extendable"],a:[0],e:"Internal indexes exist in Cloud, but their <b>retention cannot be changed</b>.",d:CL_MANIDX},
+ {exam:"cloudadmin",cat:"cloudidx",q:"Which tool monitors indexing and deployment health in Splunk Cloud (replacing the on-prem Monitoring Console)?",o:["The Distributed Management Console (DMC), edited freely","The Cloud Monitoring Console (CMC) — and you should not modify its dashboards","<code>btool</code>","The deployment server"],a:[1],e:"The <b>Cloud Monitoring Console (CMC)</b> is the Cloud health app. <b>Do not modify</b> its dashboards.",d:CL_CMC},
+ {exam:"cloudadmin",cat:"cloudidx",q:"The CMC Overview 'Attention required' section surfaces which of these?",o:["Blocked indexer queues, sustained HEC 503s, missing forwarders, high skipped-search %, and peak SVC usage","Your monthly AWS invoice","Raw <code>.conf</code> file contents","Stored LDAP passwords"],a:[0],e:"CMC flags <b>blocked queues, HEC 503s, missing forwarders, skipped searches</b>, and shows <b>peak SVC usage</b> and storage.",d:CL_CMC},
+ /* --- Config & Admin Access (ACS) --- */
+ {exam:"cloudadmin",cat:"cloudconf",q:"Which role is the Splunk Cloud Platform administrator super-role required for index, app, and ACS operations?",o:["<code>admin</code>","<code>sc_admin</code>","<code>power</code>","<code>can_delete</code>"],a:[1],e:"In Cloud the super-admin role is <b><code>sc_admin</code></b> — not the on-prem <code>admin</code> role.",d:CL_ACSREF,hard:true},
+ {exam:"cloudadmin",cat:"cloudconf",q:"Which is TRUE about using the ACS API?",o:["It requires the <code>sc_admin</code> role and a bearer token, and is not supported on single-instance deployments","It needs SSH access to the indexer","It works only from the indexer CLI","It requires no authentication"],a:[0],e:"ACS needs the <b><code>sc_admin</code></b> role + a <b>JWT/bearer token</b>, and is <b>not supported on single-instance</b> deployments (needs SH or SHC).",d:CL_ACSREF,hard:true},
+ {exam:"cloudadmin",cat:"cloudconf",q:"Which can an admin self-service via ACS (no Support ticket)?",o:["IP allow lists, indexes, HEC tokens, select limits.conf settings, and users/roles","Physically replacing an indexer's disk","Rewriting Splunk's source code","Applying the platform version upgrade"],a:[0],e:"ACS self-services <b>IP allow lists, indexes, HEC tokens, a limits.conf subset, users/roles, apps</b>, and maintenance windows.",d:CL_ACSREF},
+ {exam:"cloudadmin",cat:"cloudconf",q:"Which statement about editing <code>limits.conf</code> in Splunk Cloud is correct?",o:["You can edit any setting via SSH","ACS exposes only a <b>subset</b> of limits.conf settings (Victoria) — e.g. subsearch maxout/maxtime; anything outside the subset needs Support","limits.conf cannot be changed at all","It is edited in Splunk Web under Indexes"],a:[1],e:"ACS exposes a <b>Victoria-only subset</b> of <code>limits.conf</code> (view/edit/reset). Out-of-subset changes still require <b>Support</b>.",d:CL_ACSLIM,hard:true},
+ {exam:"cloudadmin",cat:"cloudconf",q:"In Victoria, globally-shared app assets across all search heads follow standard configuration precedence. A practical consequence is…",o:["Config precedence no longer matters in Cloud","Same-named lookups or knowledge objects across apps can collide (lexicographical ordering)","Every app is fully isolated, so nothing can collide","Precedence becomes random"],a:[1],e:"Standard <b>precedence / lexicographical ordering</b> still applies, so identically-named KOs across apps can <b>collide</b>.",d:CL_PRIVAPP,hard:true},
+ /* --- Apps & Private Apps --- */
+ {exam:"cloudadmin",cat:"cloudapps",q:"Which is TRUE about self-service app installation in Splunk Cloud?",o:["It requires the <code>sc_admin</code> role; most Splunkbase apps install directly from Splunk Web or ACS","Any user can install any app","All apps require a Support ticket","Apps can only be installed on the IDM"],a:[0],e:"Self-service install requires <b><code>sc_admin</code></b>; the large majority of Splunkbase apps install from <b>Splunk Web</b> or <b>ACS</b>.",d:CL_INSTALL},
+ {exam:"cloudadmin",cat:"cloudapps",q:"Before a private app can be self-service installed in Splunk Web, its AppInspect report must show…",o:["0 Failures, 0 Errors, and 0 Manual Checks (any Manual Check forces a Support ticket)","At least one warning","Nothing — vetting is skipped in Cloud","A passing score of 70%"],a:[0],e:"Self-service needs <b>0 Failures, 0 Errors, 0 Manual Checks</b>. Any <b>Manual Check</b> routes the app to <b>Support</b> for manual vetting.",d:CL_PRIVAPP,hard:true},
+ {exam:"cloudadmin",cat:"cloudapps",q:"Which app scenario REQUIRES contacting Splunk Support rather than self-service install?",o:["A common Splunkbase add-on on Victoria","A premium app such as Enterprise Security or ITSI","A private app that passes AppInspect cleanly","Any app under 128 MB"],a:[1],e:"<b>Premium apps (ES/ITSI)</b>, IDM installs, non-vetted apps, and apps with &gt;0 manual checks require <b>Support</b>.",d:CL_INSTALL},
+ {exam:"cloudadmin",cat:"cloudapps",q:"How must a private (custom) app for Splunk Cloud be packaged?",o:["As a <code>.spl</code>/<code>.tar.gz</code> ≤128 MB with dynamic dependencies only (no static deps)","As a Windows <code>.exe</code>","Uploaded through HEC","Any size, with static dependencies allowed"],a:[0],e:"Private apps: <b><code>.spl/.tar/.tgz</code>, ≤128 MB, dynamic dependencies only</b>. Cloud auto-runs <b>AppInspect</b> on upload.",d:CL_PRIVAPP,hard:true},
+ {exam:"cloudadmin",cat:"cloudapps",q:"Which is TRUE about updating apps in Splunk Cloud?",o:["You can roll back to a previous version with one click","After updating you cannot roll back — you must uninstall then reinstall the older package; ES/ITSI can't be self-service updated","All updates require Support","Updates are automatic and silent"],a:[1],e:"There's <b>no self-service rollback</b> — reinstall the older package. <b>ES/ITSI updates need Support</b>.",d:CL_INSTALL,hard:true},
+ {exam:"cloudadmin",cat:"cloudapps",q:"On the Victoria experience, a self-service app install lands on which components?",o:["Only one standalone search head","All search heads / SHC members (including premium ES/ITSI SHs) and indexers","Only the IDM","Only the deployment server"],a:[1],e:"On <b>Victoria</b> (no IDM), an installed app auto-deploys across <b>all search heads</b> — including premium — plus indexers.",d:CL_PRIVAPP},
+ /* --- Working with Cloud Support --- */
+ {exam:"cloudadmin",cat:"cloudsupport",q:"Before opening a Splunk Cloud Support case, an admin should first…",o:["Restart all forwarders","Self-triage with the CMC dashboards and search internal indexes (<code>index=_internal</code>, <code>index=_audit</code>) to isolate the problem","Delete the affected index","Reinstall Splunk"],a:[1],e:"<b>Isolate first</b>: use the <b>CMC</b> and search <code>_internal</code>/<code>_audit</code> before contacting Support.",d:CL_CMC},
+ {exam:"cloudadmin",cat:"cloudsupport",q:"How are Splunk Cloud Support cases submitted?",o:["Through the Splunk Support Portal (online case submission)","By editing a <code>.conf</code> file","Via the deployment server","By emailing the indexer directly"],a:[0],e:"Cases are opened through the <b>Splunk Support Portal</b>.",d:CL_SUPPORT},
+ {exam:"cloudadmin",cat:"cloudsupport",q:"Which is TRUE about Splunk support severity coverage?",o:["P1 (system inaccessible / majority unusable) is 24×7; Standard support covers P1 while Premium adds P2","All severities are 24×7 on every plan","P4 receives the fastest response","Severity has no effect on response"],a:[0],e:"<b>P1</b> = 24×7 with a fast initial response; <b>Standard</b> covers P1 and <b>Premium</b> adds P2. Verify exact SLA numbers against the customer's plan.",d:CL_SUPPORT,hard:true},
+ {exam:"cloudadmin",cat:"cloudsupport",q:"On the <b>Classic</b> experience, after creating a new index that IDM-based inputs must write to, what extra step is required?",o:["Nothing — it is automatic","Open a Support case to sync the index to your IDM","Restart the search head","Re-download the credentials package"],a:[1],e:"On <b>Classic</b>, you must open a <b>Support case to sync the new index to the IDM</b>. Victoria has no IDM, so this doesn't apply.",d:CL_MANIDX,hard:true},
+ /* --- Forwarder Management (Cloud) --- */
+ {exam:"cloudadmin",cat:"cloudfwd",q:"Which is TRUE about the deployment server in Splunk Cloud Platform?",o:["Splunk Cloud provides a managed deployment server for you","Splunk Cloud does NOT provide one — the customer hosts it (on-prem or in their own cloud) to manage forwarders","The IDM acts as your deployment server","Forwarders cannot be centrally managed in Cloud"],a:[1],e:"<b>Splunk Cloud does not provide a deployment server.</b> The <b>customer runs their own</b> (on-prem or in their cloud) to push deployment-apps to forwarder clients — a common exam trap.",d:CL_GDI,hard:true},
+ {exam:"cloudadmin",cat:"cloudfwd",q:"What is the efficient way to install the Cloud credentials package and inputs across hundreds of universal forwarders?",o:["Manually SSH to each forwarder","Place the app in <code>etc/deployment-apps</code> on a (customer-run) deployment server and push it to deployment clients","Email the <code>.spl</code> to each server owner","Send it through HEC"],a:[1],e:"Use a <b>customer-run deployment server</b>: stage <code>splunkclouduf.spl</code> + inputs as <b>deployment-apps</b> and push to the forwarder clients.",d:CL_FWD},
 ];
