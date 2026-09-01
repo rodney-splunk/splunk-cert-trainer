@@ -1,6 +1,6 @@
 // Service worker: network-first for app code (so updates always show when online),
 // with a cached copy as an offline fallback.
-const CACHE = 'splunk-trainer-v11';
+const CACHE = 'splunk-trainer-v12';
 const ASSETS = ['./', './index.html', './data.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
