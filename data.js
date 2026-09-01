@@ -1301,3 +1301,45 @@ const CLOUD_QUESTIONS = [
  {exam:"cloudadmin",cat:"cloudconf",q:"In Splunk Cloud, what is the recommended way to mask, filter, or route data at ingest — the modern replacement for hand-editing <code>SEDCMD</code>/transforms?",o:["SSH in and edit props.conf/transforms.conf","<b>Ingest Actions</b> — build rulesets in Splunk Web to mask, truncate, filter, or route data","The <code>delete</code> command","A Support case for every rule"],a:[1],e:"<b>Ingest Actions</b> lets you build rulesets in <b>Splunk Web</b> to mask/truncate/filter/route data — the Cloud-native replacement for hand-editing <code>SEDCMD</code>/transforms (which you can't do without filesystem access).",d:"https://docs.splunk.com/Documentation/Splunk/latest/Data/DataIngest",hard:true},
  {exam:"cloudadmin",cat:"cloudapps",q:"On the <b>Victoria</b> experience, installing an app requires a restart only when the app contains…",o:["Any app always requires a restart","<b>Static assets (logos/CSS/JS) or props and transforms</b>","Only dashboards","Nothing — restarts are never required"],a:[1],e:"Victoria cuts app restarts by ~90% — a restart is only needed when the app includes <b>static assets (logos, CSS, JS)</b> or <b>props and transforms</b>. Otherwise the install is seamless.",d:CL_PRIVAPP,hard:true},
 ];
+
+/* ============ Cloud Admin Course — self-paced lessons mapped to the official course deck ============ */
+function CLOUD_COURSE(){
+ return [
+  {key:'c1',cat:'cloudover',title:'Splunk Cloud Overview & Topology',modules:'Modules 1 & 14',blurb:'How Splunk Cloud is architected and who manages what.',doc:CL_GDI,
+   summary:`<ul><li><b>Shared responsibility:</b> Splunk manages the indexers, search heads, and <b>platform upgrades</b>; you manage forwarders, inputs, and (if used) your own deployment server.</li>
+   <li><b>No OS / CLI / filesystem access</b> — you administer via <b>Splunk Web</b>, the <b>Admin Config Service (ACS)</b>, or a <b>Support case</b>.</li>
+   <li><b>Victoria vs Classic:</b> find yours under <b>Support &amp; Services &gt; About</b>; Splunk assigns it. Victoria runs inputs on the search head (no IDM); Classic requires an IDM.</li>
+   <li><b>Four ways to get data in:</b> forwarders, HEC, apps/add-ons, and the IDM.</li>
+   <li><b>Module 14 (Managing Cloud):</b> Federated Search, Private Connectivity (AWS), and self-service admin via ACS.</li></ul>`},
+  {key:'c2',cat:'cloudgdi',title:'Getting Data Into Cloud',modules:'Modules 6, 8, 9, 10, 11',blurb:'Forwarders, HEC, IDM, and monitor inputs the Cloud way.',doc:CL_FWD,
+   summary:`<ul><li><b>Connect a UF:</b> download the <code>splunkclouduf.spl</code> credentials package (Splunk Web &gt; Apps &gt; Universal Forwarder), install it, and restart. It carries outputs.conf + TLS certs; can enable <b>indexer acknowledgment</b> (re-sends on no-ack).</li>
+   <li><b>UF vs HF:</b> a UF forwards unparsed data; <b>parsed/event data needs an HF or IDM</b>. Intermediate forwarders aggregate at ~<b>2:1</b> to Cloud indexers.</li>
+   <li><b>IDM:</b> required on <b>Classic</b> for scripted/modular inputs; on <b>Victoria</b> those run on the search head.</li>
+   <li><b>HEC on Cloud:</b> port <b>443</b>, with the <code>http-inputs-</code> hostname prefix.</li>
+   <li><b>Monitor inputs:</b> only <code>[monitor://path]</code> is required; a raw-event <b>time-zone offset wins</b> over props.conf <code>TZ</code>.</li></ul>`},
+  {key:'c3',cat:'cloudidx',title:'Index Management in Cloud',modules:'Module 3',blurb:'Creating indexes, retention, and the DDAS/DDAA/DDSS tiers.',doc:CL_MANIDX,
+   summary:`<ul><li><b>Create indexes</b> in Splunk Web (Settings &gt; Indexes) or via <b>ACS</b> — never by editing <code>indexes.conf</code>.</li>
+   <li><b>Retention</b> = Max raw data size + Searchable retention (days); data removed by whole buckets, oldest first. Max active indexes: <b>400 (Classic) / 1000 (Victoria)</b>.</li>
+   <li><b>Data tiers:</b> DDAS (searchable) → then <b>DDAA</b> (Splunk-managed archive, 500&nbsp;GB blocks, restorable ~24h) or <b>DDSS</b> (your own AWS/GCP storage, restore to your own Splunk to search). Only one per index.</li>
+   <li><b>Delete:</b> deleting an index is final; the <code>delete</code> command only hides events (doesn't free disk). Monitor with the <b>CMC</b>.</li></ul>`},
+  {key:'c4',cat:'cloudconf',title:'Config & Admin Access (ACS)',modules:'Modules 2, 4, 13',blurb:'ACS, config without CLI, users/auth, and Ingest Actions.',doc:CL_ACS,
+   summary:`<ul><li><b>No .conf editing:</b> change config via <b>Splunk Web</b>, the <b>ACS API/CLI</b>, or <b>Support</b>. ACS needs the <code>sc_admin</code> role + a bearer token and isn't supported on single-instance stacks.</li>
+   <li><b>ACS self-service:</b> indexes, HEC tokens, IP allow lists, a <b>limits.conf subset</b> (Victoria), users/roles, apps, maintenance windows.</li>
+   <li><b>Users &amp; auth:</b> roles → capabilities; the Cloud super-role is <code>sc_admin</code>; SAML is the common SSO.</li>
+   <li><b>Ingest Actions (Module 13):</b> build rulesets in <b>Splunk Web</b> to <b>mask/truncate/filter/route</b> data — the Cloud-native replacement for hand-edited <code>SEDCMD</code>/transforms.</li></ul>`},
+  {key:'c5',cat:'cloudapps',title:'Apps & Private Apps',modules:'Module 5',blurb:'Self-service install, AppInspect vetting, and premium apps.',doc:CL_INSTALL,
+   summary:`<ul><li><b>Self-service install</b> (needs <code>sc_admin</code>) for most Splunkbase apps — must pass <b>AppInspect with 0 Failures / 0 Errors / 0 Manual Checks</b>.</li>
+   <li><b>Premium apps (ES/ITSI)</b>, IDM installs, and &gt;0 manual checks require <b>Support</b>.</li>
+   <li><b>Private apps:</b> <code>.spl/.tgz</code> ≤128&nbsp;MB, dynamic dependencies only; Cloud auto-runs AppInspect on upload.</li>
+   <li><b>Victoria</b> auto-deploys apps to all search heads; a <b>restart is only needed</b> when the app has <b>static assets or props/transforms</b>. No self-service rollback.</li></ul>`},
+  {key:'c6',cat:'cloudsupport',title:'Working with Cloud Support',modules:'Module 15',blurb:'Isolate first, then open a case the right way.',doc:CL_SUPPORT,
+   summary:`<ul><li><b>Self-triage first:</b> use the <b>CMC</b> dashboards and search <code>index=_internal</code> / <code>index=_audit</code> to isolate the problem.</li>
+   <li><b>Open cases</b> through the Splunk Support Portal; anyone with the <b>appropriate entitlement</b> can submit.</li>
+   <li><b>Severity:</b> P1 (inaccessible) is 24×7; <b>Standard covers P1, Premium adds P2</b>.</li>
+   <li><b>Needs Support:</b> premium-app installs/updates, IDM index sync (Classic), and config outside the ACS-editable subset.</li></ul>`},
+  {key:'c7',cat:'cloudfwd',title:'Forwarder Management',modules:'Module 7',blurb:'Central management of forwarders in the Cloud model.',doc:CL_FWD,
+   summary:`<ul><li><b>Splunk Cloud does NOT provide a deployment server</b> — the customer hosts one (on-prem or their own cloud) to manage forwarders.</li>
+   <li>Push <code>splunkclouduf.spl</code> + inputs as <b>deployment-apps</b> from that deployment server to your forwarder clients.</li>
+   <li>A <b>UF has no Splunk Web/UI</b> — configure it via <b>CLI, config files, or a deployment app</b> (not the web menu).</li></ul>`},
+ ];
+}
