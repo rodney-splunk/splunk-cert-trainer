@@ -1634,42 +1634,52 @@ function splPipe(){
 }
 
 /* ============ CLOUD ADMIN COURSE — self-paced lessons + checkpoints ============ */
-function cloudCourse(openIdx){
-  currentRender=()=>cloudCourse(openIdx); S.onKey=null; try{clearTimer();}catch(e){}
+function cloudCourse(idx){
+  currentRender=()=>cloudCourse(idx); S.onKey=null; try{clearTimer();}catch(e){}
   const L=CLOUD_COURSE();
   const done=k=>store.courseDone&&store.courseDone[k];
   const links=k=>(store.courseLinks&&store.courseLinks[k])||{};
-  const doneCount=L.filter(l=>done(l.key)).length, pct=Math.round(doneCount/L.length*100);
-  const abtn='display:inline-block;background:var(--accent);color:#fff;padding:7px 12px;border-radius:8px;font-weight:700;font-size:.8rem;text-decoration:none;margin:0 6px 6px 0';
+  if(idx==null){idx=L.findIndex(l=>!done(l.key));if(idx<0)idx=0;}
+  idx=Math.max(0,Math.min(L.length-1,idx));
+  const l=L[idx], lk=links(l.key);
+  const doneCount=L.filter(x=>done(x.key)).length, pct=Math.round(doneCount/L.length*100);
+  const abtn='display:inline-block;background:var(--accent);color:#fff;padding:8px 13px;border-radius:8px;font-weight:700;font-size:.82rem;text-decoration:none;margin:0 6px 6px 0';
   const inp='width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--hair);background:var(--card);color:var(--text);font:inherit;font-size:.76rem;box-sizing:border-box';
-  const card=(l,i)=>{const lk=links(l.key);return `<details class="glass concept"${i===openIdx?' open data-open="1"':''}><summary><span class="cico">${done(l.key)?'✅':(i+1)}</span><span class="ctitle">${l.title}</span><span class="ctag">${l.modules}</span></summary>
-    <div class="cbody"><div class="cwhy">🎓 <b>Lesson ${i+1} of ${L.length}</b> — ${l.blurb}</div>${l.summary}
-    <div style="margin:10px 0;padding:10px 12px;background:rgba(96,165,250,.1);border-left:3px solid #60a5fa;border-radius:6px">
-      <div style="font-weight:800;font-size:.82rem;margin-bottom:7px">▶ Your NotebookLM overviews</div>
-      ${lk.video?`<a href="${lk.video}" target="_blank" rel="noopener" style="${abtn}">🎬 Watch Video</a>`:''}${lk.audio?`<a href="${lk.audio}" target="_blank" rel="noopener" style="${abtn}">🎧 Listen Audio</a>`:''}
-      <div style="display:flex;flex-direction:column;gap:6px;margin-top:7px">
-        <input class="clink" data-k="${l.key}" data-t="video" placeholder="Paste NotebookLM Video Overview link" value="${lk.video||''}" style="${inp}">
-        <input class="clink" data-k="${l.key}" data-t="audio" placeholder="Paste NotebookLM Audio Overview link" value="${lk.audio||''}" style="${inp}">
-      </div></div>
-    <div class="doclink" style="margin-top:8px">📖 <a href="${l.doc}" target="_blank" rel="noopener">Read the Splunk docs →</a></div>
-    <button class="cquiz" data-i="${i}">🎯 Checkpoint quiz (${byCat[l.cat].length} questions)${done(l.key)?' — passed ✅':''}</button></div></details>`;};
+  const chip=(x,i)=>`<button class="lchip" data-i="${i}" title="${x.title.replace(/"/g,'&quot;')}" style="flex-shrink:0;min-width:34px;height:34px;padding:0 7px;border-radius:8px;border:1px solid ${i===idx?'var(--accent)':'var(--hair)'};background:${i===idx?'var(--accent)':'var(--card)'};color:${i===idx?'#fff':'var(--text)'};font-weight:800;font-size:.8rem;cursor:pointer">${done(x.key)?'✅':(i+1)}</button>`;
   const v=$(`<div class="view">${topBar()}<button class="back" id="cback">← Back</button>
-    <div class="brand" style="margin-bottom:10px"><div class="logo">🎓</div><h1>Cloud Admin Course</h1><p>Your self-paced SPLK-1005 course — watch, listen, then pass the checkpoint</p></div>
-    <div class="glass" style="padding:14px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:800"><span>Course progress</span><span>${doneCount}/${L.length} lessons</span></div>
-      <div class="xpbar" style="margin-top:8px"><i data-w="${pct}" style="width:0"></i></div>
-      <p style="color:var(--muted);font-size:.78rem;margin-top:8px">Generate your <b>NotebookLM</b> Audio + Video Overviews from the course deck, paste the links into each lesson, watch/listen, then score <b>80%+</b> on the checkpoint to complete it.</p></div>
-    ${L.map(card).join('')}</div>`);
+    <div class="brand" style="margin-bottom:8px"><div class="logo">🎓</div><h1>Cloud Admin Course</h1><p>Lesson ${idx+1} of ${L.length} · ${doneCount}/${L.length} complete</p></div>
+    <div class="glass" style="padding:12px;margin-bottom:10px">
+      <div class="xpbar" style="margin:2px 0 10px"><i data-w="${pct}" style="width:0"></i></div>
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px">${L.map(chip).join('')}</div></div>
+    <div class="glass concept" style="padding:16px">
+      <h2 style="margin:0 0 3px;font-size:1.18rem">${done(l.key)?'✅ ':''}${l.title}</h2>
+      <div style="color:var(--muted);font-size:.8rem;margin-bottom:11px">${l.modules} · ${l.blurb}</div>
+      ${l.summary}
+      <div style="margin:12px 0;padding:11px 13px;background:rgba(96,165,250,.1);border-left:3px solid #60a5fa;border-radius:6px">
+        <div style="font-weight:800;font-size:.82rem;margin-bottom:7px">▶ Your NotebookLM overviews</div>
+        ${lk.video?`<a href="${lk.video}" target="_blank" rel="noopener" style="${abtn}">🎬 Watch Video</a>`:''}${lk.audio?`<a href="${lk.audio}" target="_blank" rel="noopener" style="${abtn}">🎧 Listen Audio</a>`:''}
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:7px">
+          <input class="clink" data-t="video" placeholder="Paste NotebookLM Video Overview link" value="${lk.video||''}" style="${inp}">
+          <input class="clink" data-t="audio" placeholder="Paste NotebookLM Audio Overview link" value="${lk.audio||''}" style="${inp}">
+        </div></div>
+      <div class="doclink" style="margin:0 0 12px">📖 <a href="${l.doc}" target="_blank" rel="noopener">Read the Splunk docs →</a></div>
+      <button id="startcp" style="width:100%">🎯 ${done(l.key)?'Retake':'Start'} checkpoint (${byCat[l.cat].length} questions)${done(l.key)?' ✅':''}</button>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:12px">
+      <button class="ghost" id="cprev" style="flex:1${idx===0?';opacity:.4':''}">← Previous</button>
+      <button class="ghost" id="cnext" style="flex:1${idx===L.length-1?';opacity:.4':''}">Next →</button></div></div>`);
   wireTop(v);
   v.querySelector('#cback').onclick=examInfo;
-  v.querySelectorAll('.clink').forEach(el=>el.onchange=()=>{const k=el.dataset.k,t=el.dataset.t;store.courseLinks=store.courseLinks||{};store.courseLinks[k]=store.courseLinks[k]||{};store.courseLinks[k][t]=el.value.trim();saveStore();cloudCourse(L.findIndex(x=>x.key===k));});
-  v.querySelectorAll('.cquiz').forEach(b=>b.onclick=(e)=>{e.stopPropagation();e.preventDefault();const i=+b.dataset.i,l=L[i];const qs=QUESTIONS.filter(q=>q.cat===l.cat).map(q=>Object.assign({},q));courseQuiz(qs,l.title,l.key,(i+1)<L.length?i+1:null);});
+  v.querySelectorAll('.lchip').forEach(b=>b.onclick=()=>cloudCourse(+b.dataset.i));
+  v.querySelectorAll('.clink').forEach(el=>el.onchange=()=>{const t=el.dataset.t;store.courseLinks=store.courseLinks||{};store.courseLinks[l.key]=store.courseLinks[l.key]||{};store.courseLinks[l.key][t]=el.value.trim();saveStore();cloudCourse(idx);});
+  v.querySelector('#startcp').onclick=()=>{const qs=QUESTIONS.filter(q=>q.cat===l.cat).map(q=>Object.assign({},q));courseQuiz(qs,l.title,l.key,idx,(idx+1)<L.length?idx+1:null);};
+  v.querySelector('#cprev').onclick=()=>{if(idx>0)cloudCourse(idx-1);};
+  v.querySelector('#cnext').onclick=()=>{if(idx<L.length-1)cloudCourse(idx+1);};
   show(v);
   requestAnimationFrame(()=>{const b=v.querySelector('.xpbar>i');if(b)b.style.width=b.dataset.w+'%';});
-  if(openIdx!=null){const el=v.querySelector('[data-open]');if(el)setTimeout(()=>{try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}},80);}
 }
-function courseQuiz(qs,title,lessonKey,nextIdx){
-  currentRender=()=>courseQuiz(qs,title,lessonKey,nextIdx); S.onKey=null; try{clearTimer();}catch(e){}
+function courseQuiz(qs,title,lessonKey,curIdx,nextIdx){
+  currentRender=()=>courseQuiz(qs,title,lessonKey,curIdx,nextIdx); S.onKey=null; try{clearTimer();}catch(e){}
   for(let i=qs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=qs[i];qs[i]=qs[j];qs[j]=t;}
   let qi=0,score=0;
   function q(){
@@ -1682,7 +1692,7 @@ function courseQuiz(qs,title,lessonKey,nextIdx){
         <div class="qnav"><button id="submit">Submit answer</button><button id="next" class="ghost" style="display:none">${qi===qs.length-1?'See score →':'Next →'}</button></div>
       </div></div>`);
     wireTop(v);
-    v.querySelector('#cqb').onclick=()=>cloudCourse();
+    v.querySelector('#cqb').onclick=()=>cloudCourse(curIdx);
     v.querySelectorAll('#opts .opt').forEach(o=>o.onclick=(e)=>{if(e.target.tagName==='INPUT')return;const ip=o.querySelector('input');if(multi)ip.checked=!ip.checked;else{v.querySelectorAll('#opts input').forEach(x=>x.checked=false);ip.checked=true;}});
     let answered=false;
     const grade=()=>{if(answered)return;const picked=[...v.querySelectorAll('#opts input:checked')].map(x=>+x.value);if(!picked.length)return;answered=true;
@@ -1706,9 +1716,9 @@ function courseQuiz(qs,title,lessonKey,nextIdx){
         <div style="display:flex;gap:9px;justify-content:center;margin-top:16px;flex-wrap:wrap">${win&&nextIdx!=null?`<button id="nextlesson">Next lesson →</button>`:''}<button id="retry" class="${win&&nextIdx!=null?'ghost':''}">↻ Retry</button><button id="toc" class="ghost">Back to course</button></div>
       </div></div>`);
     wireTop(v);
-    v.querySelector('#cqb2').onclick=()=>cloudCourse();
+    v.querySelector('#cqb2').onclick=()=>cloudCourse(curIdx);
     v.querySelector('#retry').onclick=()=>{qi=0;score=0;q();};
-    v.querySelector('#toc').onclick=()=>cloudCourse();
+    v.querySelector('#toc').onclick=()=>cloudCourse(curIdx);
     const nl=v.querySelector('#nextlesson');if(nl)nl.onclick=()=>cloudCourse(nextIdx);
     show(v);
   }
