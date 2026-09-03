@@ -387,6 +387,8 @@ QUESTIONS.push(...ADMIN_QUESTIONS);
 QUESTIONS.push(...CLOUD_QUESTIONS);
 QUESTIONS.forEach((q,i)=>q.id=i);
 const byCat = {}; [...CAT_ORDER, ...ADMIN_CAT_ORDER, ...CLOUD_CAT_ORDER].forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).map(q=>q.id));
+// A course lesson may draw its checkpoint from one category or several.
+const catsOf = l => (Array.isArray(l.cat) ? l.cat : [l.cat]).filter(k => byCat[k]);
 const curBank=()=>(S.exam&&QUESTIONS.some(q=>q.exam===S.exam.id))?S.exam.id:'power';
 const curQ=()=>QUESTIONS.filter(q=>q.exam===curBank());
 const CAT_ORDERS={power:CAT_ORDER,admin:ADMIN_CAT_ORDER,cloudadmin:CLOUD_CAT_ORDER};
@@ -1663,7 +1665,7 @@ function cloudCourse(idx){
           <input class="clink" data-t="audio" placeholder="Paste NotebookLM Audio Overview link" value="${lk.audio||''}" style="${inp}">
         </div></div>
       <div class="doclink" style="margin:0 0 12px">📖 <a href="${l.doc}" target="_blank" rel="noopener">Read the Splunk docs →</a></div>
-      <button id="startcp" style="width:100%">🎯 ${done(l.key)?'Retake':'Start'} checkpoint (${byCat[l.cat].length} questions)${done(l.key)?' ✅':''}</button>
+      <button id="startcp" style="width:100%">🎯 ${done(l.key)?'Retake':'Start'} checkpoint (${catsOf(l).reduce((n,k)=>n+byCat[k].length,0)} questions)${done(l.key)?' ✅':''}</button>
     </div>
     <div style="display:flex;gap:9px;margin-top:12px">
       <button class="ghost" id="cprev" style="flex:1${idx===0?';opacity:.4':''}">← Previous</button>
@@ -1672,7 +1674,7 @@ function cloudCourse(idx){
   v.querySelector('#cback').onclick=examInfo;
   v.querySelectorAll('.lchip').forEach(b=>b.onclick=()=>cloudCourse(+b.dataset.i));
   v.querySelectorAll('.clink').forEach(el=>el.onchange=()=>{const t=el.dataset.t;store.courseLinks=store.courseLinks||{};store.courseLinks[l.key]=store.courseLinks[l.key]||{};store.courseLinks[l.key][t]=el.value.trim();saveStore();cloudCourse(idx);});
-  v.querySelector('#startcp').onclick=()=>{const qs=QUESTIONS.filter(q=>q.cat===l.cat).map(q=>Object.assign({},q));courseQuiz(qs,l.title,l.key,idx,(idx+1)<L.length?idx+1:null);};
+  v.querySelector('#startcp').onclick=()=>{const ks=catsOf(l);const qs=QUESTIONS.filter(q=>ks.includes(q.cat)).map(q=>Object.assign({},q));courseQuiz(qs,l.title,l.key,idx,(idx+1)<L.length?idx+1:null);};
   v.querySelector('#cprev').onclick=()=>{if(idx>0)cloudCourse(idx-1);};
   v.querySelector('#cnext').onclick=()=>{if(idx<L.length-1)cloudCourse(idx+1);};
   show(v);
