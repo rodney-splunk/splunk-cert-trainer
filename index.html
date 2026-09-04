@@ -219,6 +219,7 @@
   .explain{margin-top:16px;padding:15px 17px;border-radius:15px;background:rgba(255,255,255,.04);border-left:4px solid var(--accent2);font-size:.92rem;animation:slideDown .35s ease both}
   .explain .v{font-weight:800;margin-bottom:8px;font-size:1rem}.explain .v.ok{color:var(--green)}.explain .v.no{color:var(--red)}
   .explain b{color:var(--accent2)}
+  .explain p{margin:0 0 10px;line-height:1.55}.explain p:last-child{margin-bottom:0}
   .doclink{margin-top:12px;font-size:.85rem}.doclink a{color:var(--accent);text-decoration:none;font-weight:700}.doclink a:hover{text-decoration:underline}
   .qnav{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
   .plusxp{margin-left:8px;color:var(--green);font-weight:800;font-size:.85rem}
@@ -385,13 +386,17 @@
 /* ============ data prep ============ */
 QUESTIONS.push(...ADMIN_QUESTIONS);
 QUESTIONS.push(...CLOUD_QUESTIONS);
+QUESTIONS.push(...CLOUDFUND_QUESTIONS);   // appended last so existing question ids stay stable
 QUESTIONS.forEach((q,i)=>q.id=i);
-const byCat = {}; [...CAT_ORDER, ...ADMIN_CAT_ORDER, ...CLOUD_CAT_ORDER].forEach(k=>byCat[k]=QUESTIONS.filter(q=>q.cat===k).map(q=>q.id));
+// Fundamentals and Challenge are two banks over the same SPLK-1005 categories, so a
+// category lookup has to be scoped to the bank in view or the two bleed into each other.
+const byCatOf = {}; QUESTIONS.forEach(q=>{const b=byCatOf[q.exam]=byCatOf[q.exam]||{};(b[q.cat]=b[q.cat]||[]).push(q.id);});
+const bcat = (k,bank)=>((byCatOf[bank||curBank()]||{})[k])||[];
 // A course lesson may draw its checkpoint from one category or several.
-const catsOf = l => (Array.isArray(l.cat) ? l.cat : [l.cat]).filter(k => byCat[k]);
+const catsOf = l => (Array.isArray(l.cat) ? l.cat : [l.cat]).filter(k => bcat(k).length);
 const curBank=()=>(S.exam&&QUESTIONS.some(q=>q.exam===S.exam.id))?S.exam.id:'power';
 const curQ=()=>QUESTIONS.filter(q=>q.exam===curBank());
-const CAT_ORDERS={power:CAT_ORDER,admin:ADMIN_CAT_ORDER,cloudadmin:CLOUD_CAT_ORDER};
+const CAT_ORDERS={power:CAT_ORDER,admin:ADMIN_CAT_ORDER,cloudadmin:CLOUD_CAT_ORDER,cloudfund:CLOUD_CAT_ORDER};
 const curOrder=()=>{const b=curBank();if(CAT_ORDERS[b])return CAT_ORDERS[b];const seen=[];QUESTIONS.forEach(q=>{if(q.exam===b&&!seen.includes(q.cat))seen.push(q.cat);});return seen.length?seen:CAT_ORDER;};
 
 /* ============ persistent store ============ */
@@ -622,7 +627,7 @@ function examInfo(){
     <div class="section-title">Or drill a single category</div>
     <div class="glass" style="padding:8px"><select id="drillsel" style="width:100%;padding:14px;border-radius:14px;background:transparent;color:var(--text);border:0;font:inherit;font-weight:600">
       <option value="">Pick a category to drill…</option>
-      ${ord.map(k=>`<option value="${k}">${CATEGORIES[k].name} (${byCat[k].length} Q)</option>`).join('')}
+      ${ord.map(k=>`<option value="${k}">${CATEGORIES[k].name} (${bcat(k).length} Q)</option>`).join('')}
     </select></div>
     <div class="section-title">Exam blueprint · 10 categories</div>
     ${cats3}
@@ -650,7 +655,7 @@ function examInfo(){
     startQuiz(mode, ids, false);
   };});
   v.querySelectorAll('#qcount .seg').forEach(s=>s.onclick=()=>{S.qCount=+s.dataset.n; v.querySelectorAll('#qcount .seg').forEach(x=>x.classList.toggle('on',x===s));});
-  v.querySelector('#drillsel').onchange=(ev)=>{const k=ev.target.value;if(k)startQuiz('drill',byCat[k].slice(),true);};
+  v.querySelector('#drillsel').onchange=(ev)=>{const k=ev.target.value;if(k)startQuiz('drill',bcat(k).slice(),true);};
   const ed=v.querySelector('#examdate');if(ed)ed.onchange=(ev)=>{store.examDates[e.id]=ev.target.value;saveStore();examInfo();};
   const more=v.querySelector('#bpmore'), tg=v.querySelector('#bptoggle');
   tg.onclick=()=>{const open=more.style.display!=='none';more.style.display=open?'none':'block';tg.textContent=open?'See all 10 categories ↓':'See less ↑';};
@@ -1665,7 +1670,7 @@ function cloudCourse(idx){
           <input class="clink" data-t="audio" placeholder="Paste NotebookLM Audio Overview link" value="${lk.audio||''}" style="${inp}">
         </div></div>
       <div class="doclink" style="margin:0 0 12px">📖 <a href="${l.doc}" target="_blank" rel="noopener">Read the Splunk docs →</a></div>
-      <button id="startcp" style="width:100%">🎯 ${done(l.key)?'Retake':'Start'} checkpoint (${catsOf(l).reduce((n,k)=>n+byCat[k].length,0)} questions)${done(l.key)?' ✅':''}</button>
+      <button id="startcp" style="width:100%">🎯 ${done(l.key)?'Retake':'Start'} checkpoint (${catsOf(l).reduce((n,k)=>n+bcat(k).length,0)} questions)${done(l.key)?' ✅':''}</button>
     </div>
     <div style="display:flex;gap:9px;margin-top:12px">
       <button class="ghost" id="cprev" style="flex:1${idx===0?';opacity:.4':''}">← Previous</button>
@@ -1917,7 +1922,7 @@ function results(pct,pass,total,earned){
   const weak=cats.filter(x=>x.acc<75).sort((a,b)=>a.acc-b.acc);
   const focus=weak.length?weak.map(x=>`<div class="glass focus ${x.acc<50?'strong':''}"><h4>${CATEGORIES[x.k].name} <span class="sc">· ${x.acc}%</span></h4>
     <p>${CATEGORIES[x.k].blurb}</p><p style="margin-top:10px"><a href="${CATEGORIES[x.k].doc}" target="_blank" rel="noopener">📖 Brush up in the Splunk docs →</a></p>
-    <button class="drill" data-k="${x.k}">Drill ${byCat[x.k].length} ${CATEGORIES[x.k].name.split(' ')[0]} questions →</button></div>`).join('')
+    <button class="drill" data-k="${x.k}">Drill ${bcat(x.k).length} ${CATEGORIES[x.k].name.split(' ')[0]} questions →</button></div>`).join('')
     :`<div class="glass allgood">🎯 No weak areas - every category at 75%+. Nicely done!</div>`;
   const missedSorted=[...S.missed].sort((a,b)=>(b.flag?1:0)-(a.flag?1:0));
   const review=S.missed.length?`<div class="section-title">Review · ${S.missed.length} missed${S.flags.size?` · ${[...S.flags].length} flagged`:''}</div>`+
@@ -1938,7 +1943,7 @@ function results(pct,pass,total,earned){
   v.querySelector('#retake').onclick=()=>startQuiz(S.mode, S.mode==='missed'?store.missedIds.filter(id=>QUESTIONS[id]&&QUESTIONS[id].exam===curBank()):S.order.slice(), true);
   v.querySelector('#info').onclick=examInfo;
   v.querySelector('#home').onclick=menu;
-  v.querySelectorAll('.drill').forEach(b=>b.onclick=()=>startQuiz('drill',byCat[b.dataset.k].slice(),true));
+  v.querySelectorAll('.drill').forEach(b=>b.onclick=()=>startQuiz('drill',bcat(b.dataset.k).slice(),true));
   show(v);
   requestAnimationFrame(()=>{
     v.querySelector('#scircle').style.strokeDashoffset=c*(1-pct/100);
